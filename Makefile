@@ -10,6 +10,7 @@ LIBS :=
 BIN_DIR := bin
 TEST_DIR := test
 INC_DIR := include
+DOC_DIR := doc
 
 # Sanitizer configuration
 ifeq ($(ENABLE_ASAN),1)
@@ -28,18 +29,20 @@ endif
 # Test and benchmark binaries
 TEST_BINARY := $(BIN_DIR)/test_bptree
 BENCH_BINARY := $(BIN_DIR)/bench_bptree
+EXAMPLE_BINARY := $(BIN_DIR)/example
 
 .DEFAULT_GOAL := help
 
 .PHONY: help
 help: ## Show the targets and their descriptions
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; \
+ 	{printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 .PHONY: all
-all: test bench ## Build and run tests and benchmarks
+all: clean doc test bench example ## Build all targets and run tests and benchmarks
 
 .PHONY: test
 test: $(TEST_BINARY) ## Build and run tests
@@ -60,22 +63,18 @@ $(BENCH_BINARY): $(TEST_DIR)/bench_bptree.c $(INC_DIR)/bptree.h | $(BIN_DIR)
 .PHONY: clean
 clean: ## Remove build artifacts
 	@echo "Cleaning up build artifacts..."
-	rm -rf $(BIN_DIR) *.gcno *.gcda *.gcov
+	rm -rf $(BIN_DIR) $(DOC_DIR) *.gcno *.gcda *.gcov
 
 .PHONY: format
 format: ## Format source code
 	@echo "Formatting source code..."
+	@command -v clang-format >/dev/null 2>&1 || { echo >&2 "clang-format not found."; exit 1; }
 	clang-format -i $(TEST_DIR)/*.c $(INC_DIR)/*.h
 
 .PHONY: lint
 lint: ## Run linter checks
 	@echo "Running linters..."
 	cppcheck --enable=all --inconclusive --quiet --std=c11 -I$(INC_DIR) $(TEST_DIR)
-	@if command -v clang-tidy > /dev/null; then \
-		clang-tidy $(TEST_DIR)/*.c -- $(CFLAGS); \
-	else \
-		echo "clang-tidy not found. Skipping."; \
-	fi
 
 .PHONY: install
 install: ## Install header file
@@ -92,7 +91,7 @@ uninstall: ## Remove installed header file
 install-deps: ## Install development dependencies (for Debian-based systems)
 	@echo "Installing development dependencies..."
 	sudo apt-get update && sudo apt-get install -y \
-		gcc gdb clang clang-format clang-tidy cppcheck valgrind
+		gcc gdb clang clang-format cppcheck valgrind
 
 .PHONY: coverage
 coverage: CFLAGS += -fprofile-arcs -ftest-coverage
@@ -105,13 +104,32 @@ coverage: clean $(TEST_BINARY) ## Generate code coverage report
 	@echo "Coverage report generated"
 
 .PHONY: memcheck
-memcheck: $(TEST_BINARY) $(BENCH_BINARY) ## Run memory checks with Valgrind
+memcheck: $(EXAMPLE_BINARY) $(TEST_BINARY) $(BENCH_BINARY) ## Run memory checks with Valgrind
+	@echo "Running memory checks..."
+	@echo "Running example with Valgrind..."
+	valgrind --leak-check=full --show-leak-kinds=all ./$(EXAMPLE_BINARY)
 	@echo "Running tests with Valgrind..."
 	valgrind --leak-check=full --show-leak-kinds=all ./$(TEST_BINARY)
 	@echo "Running benchmarks with Valgrind..."
 	valgrind --leak-check=full --show-leak-kinds=all ./$(BENCH_BINARY)
+	@echo "Valgrind checks completed"
 
 .PHONY: doc
 doc: ## Generate documentation
 	@echo "Generating documentation..."
+	@test -f Doxyfile || { echo "Error: Doxyfile not found."; exit 1; }
 	doxygen Doxyfile
+
+.PHONY: example
+example: $(EXAMPLE_BINARY) ## Run examples
+	@echo "Running the example..."
+	./$(EXAMPLE_BINARY)
+
+$(EXAMPLE_BINARY): $(TEST_DIR)/example.c $(INC_DIR)/bptree.h | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+.PHONY: release
+release: BUILD_TYPE=release
+release: all ## Build everything in release mode (optimized)
+	@echo "Building in release mode..."
+	@$(MAKE) all

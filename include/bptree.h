@@ -34,7 +34,7 @@ extern "C" {
 
 /*
  * @brief Buffer size for formatted timestamp.
-*/
+ */
 #define TIMESTAMP_BUF_SIZE 32
 
 /**

@@ -1,6 +1,6 @@
 /**
  * @file bench_bptree.c
- * @brief Benchmarks and performance tests for the B+Tree library.
+ * @brief Benchmarks and performance tests for the Bptree library.
  *
  * This file benchmarks bulk loading, insertion, search, iteration, deletion,
  * and range search operations on a B+Tree using both random and sequential

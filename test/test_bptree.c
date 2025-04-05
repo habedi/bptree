@@ -1,9 +1,9 @@
 /**
  * @file test_bptree.c
- * @brief Unit tests for the B+Tree library.
+ * @brief Unit tests for the Bptree library.
  *
- * This file implements a series of tests to verify the behavior of the
- * B+Tree library. It tests insertion, deletion, search, range queries,
+ * This file implements a series of tests to verify the behavior of Bptree.
+ * It tests insertion, deletion, search, range queries,
  * bulk loading, iteration, and tree statistics.
  */
 

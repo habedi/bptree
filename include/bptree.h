@@ -32,7 +32,9 @@ extern "C" {
 #include <stdio.h>
 #include <time.h>
 
-// Define the maximum size of the timestamp buffer
+/*
+ * @brief Buffer size for formatted timestamp.
+*/
 #define TIMESTAMP_BUF_SIZE 32
 
 /**

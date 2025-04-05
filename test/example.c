@@ -19,10 +19,10 @@ int record_compare(const void *a, const void *b, const void *udata) {
 }
 
 int main() {
-    // Create a new B+tree instance. We set max_keys to 4 for this example.
+    // Create a new B+ tree instance. We set max_keys to 4 for this example.
     bptree *tree = bptree_new(4, record_compare, NULL, NULL, NULL, true);  // debug_enabled = true
     if (!tree) {
-        printf("Failed to create B+tree\n");
+        printf("Failed to create the tree\n");
         return 1;
     }
 

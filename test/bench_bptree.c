@@ -1,9 +1,9 @@
 /**
  * @file bench_bptree.c
- * @brief Benchmarks and performance tests for the B+Tree library.
+ * @brief Benchmarks and performance tests for the Bptree library.
  *
  * This file benchmarks bulk loading, insertion, search, iteration, deletion,
- * and range search operations on a B+Tree using both random and sequential
+ * and range search operations on a B+ tree using both random and sequential
  * input. It also includes helper functions for shuffling arrays and comparing integers.
  */
 
@@ -94,7 +94,7 @@ void shuffle(void **array, const int n) {
 }
 
 /**
- * @brief Main entry point for the B+Tree benchmark.
+ * @brief Main entry point for the B+ tree benchmark.
  *
  * This function reads environment variables for seed, maximum items per node,
  * and number of elements (N) to test with. It then performs various benchmarks:

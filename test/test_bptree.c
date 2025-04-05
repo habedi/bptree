@@ -1,9 +1,9 @@
 /**
  * @file test_bptree.c
- * @brief Unit tests for the B+Tree library.
+ * @brief Unit tests for the Bptree library.
  *
- * This file implements a series of tests to verify the behavior of the
- * B+Tree library. It tests insertion, deletion, search, range queries,
+ * This file implements a series of tests to verify the behavior of Bptree.
+ * It tests insertion, deletion, search, range queries,
  * bulk loading, iteration, and tree statistics.
  */
 
@@ -38,7 +38,7 @@ int str_compare(const void *a, const void *b, const void *udata) {
 /**
  * @brief Tests insertion and search functionality.
  *
- * This test creates a B+Tree, inserts three string items, verifies that
+ * This test creates a B+ tree, inserts three string items, verifies that
  * searching for an inserted key returns the correct value, and that a non-existent
  * key returns NULL.
  */
@@ -81,9 +81,9 @@ void test_deletion() {
 }
 
 /**
- * @brief Tests operations on an empty B+Tree.
+ * @brief Tests operations on an empty tree.
  *
- * This test creates an empty B+Tree and confirms that searching for any key
+ * This test creates an empty B+ tree and confirms that searching for any key
  * returns NULL and that removal attempts yield the BPTREE_NOT_FOUND status.
  */
 void test_empty_tree() {
@@ -116,7 +116,7 @@ void test_duplicate_insertion() {
 }
 
 /**
- * @brief Tests B+Tree functionality with a single element.
+ * @brief Tests B+ tree functionality with a single element.
  *
  * This test inserts a single element into the tree, verifies that it can be
  * retrieved, then removes it and confirms that it is no longer present.
@@ -165,7 +165,7 @@ void test_long_string_keys() {
 /**
  * @brief Tests mixed operations including insertion, deletion, and retrieval.
  *
- * This test performs a series of mixed operations on the B+Tree. It first inserts a set of keys,
+ * This test performs a series of mixed operations on the B+ tree. It first inserts a set of keys,
  * deletes some, then inserts additional keys, and finally verifies that all operations produce
  * the expected results.
  */
@@ -219,7 +219,7 @@ void test_repeated_nonexistent_deletion() {
 /**
  * @brief Tests insertion, retrieval, and deletion of an empty string key.
  *
- * This test verifies that an empty string can be used as a key by the B+Tree.
+ * This test verifies that an empty string can be used as a key by the tree.
  */
 void test_empty_string_key() {
     printf("Test empty string key...\n");
@@ -360,7 +360,7 @@ void test_range_search_boundaries() {
 /**
  * @brief Tests the bulk loading of a sorted array of keys.
  *
- * This test allocates an array of keys, bulk loads them into the B+Tree, and
+ * This test allocates an array of keys, bulk loads them into the B+ tree, and
  * then verifies that each key can be retrieved.
  */
 void test_bulk_load_sorted() {
@@ -399,7 +399,7 @@ void test_bulk_load_empty() {
 }
 
 /**
- * @brief Tests the iterator functionality of the B+Tree.
+ * @brief Tests the iterator functionality of the B+ tree.
  *
  * This test inserts several keys, creates an iterator, and then iterates through
  * the tree, verifying that the number of iterated elements matches the tree's count.
@@ -426,7 +426,7 @@ void test_iterator() {
 }
 
 /**
- * @brief Tests retrieval of B+Tree statistics.
+ * @brief Tests retrieval of tree statistics.
  *
  * This test inserts several keys into the tree and then verifies that the
  * statistics (item count, tree height, and node count) are correctly reported.
@@ -451,7 +451,7 @@ void test_tree_stats() {
 }
 
 /**
- * @brief Main function to run all B+Tree tests.
+ * @brief Main function to run all the tests.
  *
  * This function calls each test function in sequence and prints a success
  * message if all tests pass.

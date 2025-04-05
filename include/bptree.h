@@ -1,8 +1,8 @@
 /**
  * @file bptree.h
- * @brief A single-header B+tree implementation in pure C.
+ * @brief A single-header B+ tree implementation in pure C.
  *
- * This is a generic, memory-efficient B+tree implementation that can be used
+ * This is a generic, in-memory B+ tree implementation that can be used
  * for key-value storage with different data types. It is implemented as a single
  * header file with no external dependencies other than the C standard library.
  *
@@ -32,7 +32,9 @@ extern "C" {
 #include <stdio.h>
 #include <time.h>
 
-// Define the maximum size of the timestamp buffer
+/*
+ * @brief Buffer size for formatted timestamp.
+ */
 #define TIMESTAMP_BUF_SIZE 32
 
 /**
@@ -68,7 +70,7 @@ static void bptree_logger(const char *fmt, ...) {
 }
 
 /**
- * @brief Custom memory allocation function type for B+Tree.
+ * @brief Custom memory allocation function type for B+ tree.
  *
  * @param size Number of bytes to allocate.
  * @return Pointer to the allocated memory.
@@ -76,14 +78,14 @@ static void bptree_logger(const char *fmt, ...) {
 typedef void *(*bptree_malloc_t)(size_t size);
 
 /**
- * @brief Custom memory free function type for B+Tree.
+ * @brief Custom memory free function type for B+ tree.
  *
  * @param ptr Pointer to the memory to free.
  */
 typedef void (*bptree_free_t)(void *ptr);
 
 /**
- * @brief Status codes returned by B+Tree operations.
+ * @brief Status codes returned by B+ tree operations.
  */
 typedef enum {
     BPTREE_OK,               /**< Operation completed successfully. */
@@ -94,12 +96,12 @@ typedef enum {
 } bptree_status;
 
 /**
- * @brief Opaque structure representing a B+Tree.
+ * @brief Opaque structure representing a B+ tree.
  */
 typedef struct bptree bptree;
 
 /**
- * @brief Creates a new B+Tree.
+ * @brief Creates a new B+ tree.
  *
  * @param max_keys Maximum number of keys in a node.
  * @param compare Comparison function to order keys.
@@ -107,7 +109,7 @@ typedef struct bptree bptree;
  * @param malloc_fn Custom memory allocation function.
  * @param free_fn Custom memory free function.
  * @param debug_enabled Enable or disable debug logging.
- * @return Pointer to the newly created B+Tree, or NULL on failure.
+ * @return Pointer to the newly created B+ tree, or NULL on failure.
  */
 bptree *bptree_new(int max_keys,
                    int (*compare)(const void *first, const void *second, const void *user_data),
@@ -115,45 +117,45 @@ bptree *bptree_new(int max_keys,
                    bool debug_enabled);
 
 /**
- * @brief Frees the memory allocated for the B+Tree.
+ * @brief Frees the memory allocated for the B+ tree.
  *
- * @param tree Pointer to the B+Tree to free.
+ * @param tree Pointer to the B+ tree to free.
  */
 void bptree_free(bptree *tree);
 
 /**
- * @brief Inserts an item into the B+Tree.
+ * @brief Inserts an item into the B+ tree.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the B+ tree.
  * @param item Pointer to the item to insert.
  * @return Status code indicating the result of the operation.
  */
 bptree_status bptree_put(bptree *tree, void *item);
 
 /**
- * @brief Removes an item from the B+Tree.
+ * @brief Removes an item from the B+ tree.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the B+ tree.
  * @param key Pointer to the key of the item to remove.
  * @return Status code indicating the result of the operation.
  */
 bptree_status bptree_remove(bptree *tree, const void *key);
 
 /**
- * @brief Retrieves an item from the B+Tree.
+ * @brief Retrieves an item from the B+ tree.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the B+ tree.
  * @param key Pointer to the key of the item to retrieve.
  * @return Pointer to the item if found, or NULL if not found.
  */
 void *bptree_get(const bptree *tree, const void *key);
 
 /**
- * @brief Retrieves a range of items from the B+Tree.
+ * @brief Retrieves a range of items from the B+ tree.
  *
  * The range is inclusive of both start_key and end_key.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the B+ tree.
  * @param start_key Pointer to the starting key of the range.
  * @param end_key Pointer to the ending key of the range.
  * @param count Pointer to an integer that will hold the number of items returned.
@@ -162,7 +164,7 @@ void *bptree_get(const bptree *tree, const void *key);
 void **bptree_get_range(const bptree *tree, const void *start_key, const void *end_key, int *count);
 
 /**
- * @brief Bulk loads a sorted array of items into a B+Tree.
+ * @brief Bulk loads a sorted array of items into a B+ tree.
  *
  * @param max_keys Maximum number of keys in a node.
  * @param compare Comparison function to order keys.
@@ -172,7 +174,7 @@ void **bptree_get_range(const bptree *tree, const void *start_key, const void *e
  * @param debug_enabled Enable or disable debug logging.
  * @param sorted_items Array of sorted items to load.
  * @param n_items Number of items in the array.
- * @return Pointer to the newly created B+Tree, or NULL on failure.
+ * @return Pointer to the newly created B+ tree, or NULL on failure.
  */
 bptree *bptree_bulk_load(int max_keys,
                          int (*compare)(const void *first, const void *second,
@@ -181,7 +183,7 @@ bptree *bptree_bulk_load(int max_keys,
                          bool debug_enabled, void **sorted_items, int n_items);
 
 /**
- * @brief Structure representing an iterator for traversing the B+Tree.
+ * @brief Structure representing an iterator for traversing the B+ tree.
  */
 typedef struct bptree_iterator {
     struct bptree_node *current_leaf; /**< Current leaf node in the iteration. */
@@ -189,11 +191,11 @@ typedef struct bptree_iterator {
 } bptree_iterator;
 
 /**
- * @brief Creates a new iterator for the B+Tree.
+ * @brief Creates a new iterator for the B+ tree.
  *
  * The iterator traverses items in sorted order.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the B+ tree.
  * @return Pointer to the newly created iterator, or NULL on failure.
  */
 bptree_iterator *bptree_iterator_new(const bptree *tree);
@@ -201,7 +203,7 @@ bptree_iterator *bptree_iterator_new(const bptree *tree);
 /**
  * @brief Advances the iterator to the next item.
  *
- * @param iter Pointer to the B+Tree iterator.
+ * @param iter Pointer to the B+ tree iterator.
  * @return Pointer to the next item, or NULL if the end is reached.
  */
 void *bptree_iterator_next(bptree_iterator *iter);
@@ -215,7 +217,7 @@ void *bptree_iterator_next(bptree_iterator *iter);
 void bptree_iterator_free(bptree_iterator *iter, bptree_free_t free_fn);
 
 /**
- * @brief Structure containing statistics about the B+Tree.
+ * @brief Structure containing statistics about the B+ tree.
  */
 typedef struct bptree_stats {
     int count;      /**< Total number of items stored in the tree. */
@@ -224,9 +226,9 @@ typedef struct bptree_stats {
 } bptree_stats;
 
 /**
- * @brief Retrieves statistics about the B+Tree.
+ * @brief Retrieves statistics about the B+ tree.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the B+ tree.
  * @return A structure containing the tree statistics.
  */
 bptree_stats bptree_get_stats(const bptree *tree);
@@ -259,13 +261,13 @@ bptree_stats bptree_get_stats(const bptree *tree);
 static void *default_malloc(const size_t size) { return malloc(size); }
 
 /**
- * @brief Default memory free function.
+ * @brief Default (memory) free function.
  *
  * @param ptr Pointer to the memory to free.
  */
 static void default_free(void *ptr) { free(ptr); }
 
-/* Internal structure representing a node in the B+Tree */
+/* Internal structure representing a node in the B+ tree */
 typedef struct bptree_node {
     int is_leaf;  /**< Flag indicating whether the node is a leaf (non-zero) or internal (zero). */
     int num_keys; /**< Number of keys currently stored in the node. */
@@ -282,7 +284,7 @@ typedef struct bptree_node {
     } ptr;
 } bptree_node;
 
-/* Definition of the main B+Tree structure */
+/* Definition of the main B+ tree structure */
 struct bptree {
     int max_keys; /**< Maximum number of keys in a node. */
     int min_keys; /**< Minimum number of keys required in a node (except root). */
@@ -302,7 +304,7 @@ struct bptree {
 /**
  * @brief Performs a binary search on an array of keys.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the B+ tree.
  * @param array Array of key pointers.
  * @param count Number of keys in the array.
  * @param key Key to search for.
@@ -328,7 +330,7 @@ static int binary_search(const bptree *tree, void *const *array, const int count
 /**
  * @brief Searches for a key in a leaf node.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the B+ tree.
  * @param keys Array of keys in the leaf node.
  * @param count Number of keys in the leaf node.
  * @param key Key to search for.
@@ -342,7 +344,7 @@ static int leaf_node_search(const bptree *tree, void *const *keys, const int cou
 /**
  * @brief Searches for a key in an internal node.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the B+ tree.
  * @param keys Array of keys in the internal node.
  * @param count Number of keys in the internal node.
  * @param key Key to search for.
@@ -365,7 +367,7 @@ static int internal_node_search(const bptree *tree, void *const *keys, const int
 /**
  * @brief Creates a new leaf node.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the B+ tree.
  * @return Pointer to the new leaf node, or NULL on failure.
  */
 static bptree_node *create_leaf(const bptree *tree) {
@@ -396,7 +398,7 @@ static bptree_node *create_leaf(const bptree *tree) {
 /**
  * @brief Creates a new internal node.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the B+ tree.
  * @return Pointer to the new internal node, or NULL on failure.
  */
 static bptree_node *create_internal(const bptree *tree) {
@@ -427,7 +429,7 @@ static bptree_node *create_internal(const bptree *tree) {
 /**
  * @brief Recursively frees a node and its descendants.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the B+ tree.
  * @param node Pointer to the node to free.
  */
 static void free_node(bptree *tree, bptree_node *node) {
@@ -457,7 +459,7 @@ typedef struct {
 /**
  * @brief Splits an internal node and promotes a key.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the B+ tree.
  * @param node Internal node to split.
  * @param new_key Key to insert.
  * @param new_child Child pointer corresponding to new_key.
@@ -511,9 +513,9 @@ static insert_result split_internal(const bptree *tree, bptree_node *node, void 
 }
 
 /**
- * @brief Recursively inserts an item into the B+Tree.
+ * @brief Recursively inserts an item into the B+ tree.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the B+ tree.
  * @param node Current node in the recursion.
  * @param item Pointer to the item to insert.
  * @return Structure containing information about a potential key promotion and status.
@@ -865,7 +867,7 @@ inline bptree *bptree_new(
     tree->malloc_fn = malloc_fn;
     tree->free_fn = free_fn;
     tree->debug_enabled = debug_enabled;
-    BPTREE_LOG_DEBUG(tree, "B+tree created (max_keys=%d)", tree->max_keys);
+    BPTREE_LOG_DEBUG(tree, "B+ tree created (max_keys=%d)", tree->max_keys);
     tree->root = create_leaf(tree);
     if (!tree->root) {
         tree->free_fn(tree);
@@ -1083,9 +1085,9 @@ void bptree_iterator_free(bptree_iterator *iter, bptree_free_t free_fn) {
 }
 
 /**
- * @brief Recursively counts the nodes in the B+Tree.
+ * @brief Recursively counts the nodes in the B+ tree.
  *
- * @param tree Pointer to the B+Tree.
+ * @param tree Pointer to the tree.
  * @param node Pointer to the current node.
  * @return Total count of nodes in the subtree.
  */

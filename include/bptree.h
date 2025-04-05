@@ -261,7 +261,7 @@ bptree_stats bptree_get_stats(const bptree *tree);
 static void *default_malloc(const size_t size) { return malloc(size); }
 
 /**
- * @brief Default memory free function.
+ * @brief Default (memory) free function.
  *
  * @param ptr Pointer to the memory to free.
  */

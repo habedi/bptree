@@ -17,12 +17,12 @@
 #include "bptree.h"
 
 /**
- * @brief Global flag to enable or disable debug logging.
+ * Global flag to enable or disable debug logging.
  */
 const bool debug_enabled = false;
 
 /**
- * @brief Comparison function for integers.
+ * Comparison function for integers.
  *
  * Compares two integers pointed by @p a and @p b.
  *
@@ -39,7 +39,7 @@ int compare_ints(const void *a, const void *b, const void *udata) {
 }
 
 /**
- * @brief Comparison function for qsort using integer pointers.
+ * Comparison function for qsort using integer pointers.
  *
  * This function is used by qsort to compare pointers to integers.
  *
@@ -54,7 +54,7 @@ int compare_ints_qsort(const void *a, const void *b) {
 }
 
 /**
- * @brief Benchmarking macro.
+ * Benchmarking macro.
  *
  * Executes a code block @p count times, measuring the total elapsed time,
  * and prints the timing information.
@@ -76,7 +76,7 @@ int compare_ints_qsort(const void *a, const void *b) {
     } while (0)
 
 /**
- * @brief Shuffles an array in-place.
+ * Shuffles an array in-place.
  *
  * Implements the Fisher-Yates shuffle algorithm to randomize the order
  * of elements in the array.
@@ -94,18 +94,7 @@ void shuffle(void **array, const int n) {
 }
 
 /**
- * @brief Main entry point for the B+ tree benchmark.
- *
- * This function reads environment variables for seed, maximum items per node,
- * and number of elements (N) to test with. It then performs various benchmarks:
- * - Bulk load benchmark
- * - Insertion benchmarks (random and sequential)
- * - Search benchmarks (random and sequential)
- * - Iterator benchmark
- * - Deletion benchmarks (random and sequential)
- * - Range search benchmark
- *
- * @return Exit status.
+ * Main entry point for the B+ tree benchmark.
  */
 int main(void) {
     int seed = getenv("SEED") ? atoi(getenv("SEED")) : (int)time(NULL);
@@ -133,8 +122,8 @@ int main(void) {
     /* --- Bulk Load Benchmark --- */
     qsort(pointers, N, sizeof(void *), compare_ints_qsort);
     BENCH("Bulk Load (sorted)", 1, {
-        bptree *tree =
-            bptree_bulk_load(max_keys, compare_ints, NULL, NULL, NULL, debug_enabled, pointers, N);
+        bptree *tree = bptree_bulk_load(max_keys, compare_ints, NULL, NULL, NULL, NULL, NULL,
+                                        debug_enabled, pointers, N);
         if (!tree) {
             fprintf(stderr, "Bulk load failed\n");
             exit(1);
@@ -145,7 +134,8 @@ int main(void) {
     /* --- Insertion Benchmarks --- */
     shuffle(pointers, N);
     {
-        bptree *tree = bptree_new(max_keys, compare_ints, NULL, NULL, NULL, debug_enabled);
+        bptree *tree =
+            bptree_new(max_keys, compare_ints, NULL, NULL, NULL, NULL, NULL, debug_enabled);
         if (!tree) {
             fprintf(stderr, "Failed to create tree\n");
             exit(1);
@@ -158,7 +148,8 @@ int main(void) {
     }
     qsort(pointers, N, sizeof(void *), compare_ints_qsort);
     {
-        bptree *tree = bptree_new(max_keys, compare_ints, NULL, NULL, NULL, debug_enabled);
+        bptree *tree =
+            bptree_new(max_keys, compare_ints, NULL, NULL, NULL, NULL, NULL, debug_enabled);
         if (!tree) {
             fprintf(stderr, "Failed to create tree\n");
             exit(1);
@@ -173,7 +164,8 @@ int main(void) {
     /* --- Search Benchmarks --- */
     shuffle(pointers, N);
     {
-        bptree *tree = bptree_new(max_keys, compare_ints, NULL, NULL, NULL, debug_enabled);
+        bptree *tree =
+            bptree_new(max_keys, compare_ints, NULL, NULL, NULL, NULL, NULL, debug_enabled);
         if (!tree) {
             fprintf(stderr, "Failed to create tree\n");
             exit(1);
@@ -194,7 +186,8 @@ int main(void) {
     }
     qsort(pointers, N, sizeof(void *), compare_ints_qsort);
     {
-        bptree *tree = bptree_new(max_keys, compare_ints, NULL, NULL, NULL, debug_enabled);
+        bptree *tree =
+            bptree_new(max_keys, compare_ints, NULL, NULL, NULL, NULL, NULL, debug_enabled);
         if (!tree) {
             fprintf(stderr, "Failed to create tree\n");
             exit(1);
@@ -217,7 +210,8 @@ int main(void) {
     /* --- Iterator Benchmark --- */
     {
         qsort(pointers, N, sizeof(void *), compare_ints_qsort);
-        bptree *tree = bptree_new(max_keys, compare_ints, NULL, NULL, NULL, debug_enabled);
+        bptree *tree =
+            bptree_new(max_keys, compare_ints, NULL, NULL, NULL, NULL, NULL, debug_enabled);
         if (!tree) {
             fprintf(stderr, "Failed to create tree\n");
             exit(1);
@@ -236,7 +230,7 @@ int main(void) {
                 count++;
             }
             iter_total += count;
-            bptree_iterator_free(iter, tree->free_fn);
+            bptree_iterator_free(iter, tree->free_fn, tree->alloc_ctx);
         });
         printf("Total iterated elements over %d iterations: %d (expected %d per iteration)\n",
                iterations, iter_total, tree->count);
@@ -246,7 +240,8 @@ int main(void) {
     /* --- Deletion Benchmarks --- */
     {
         shuffle(pointers, N);
-        bptree *tree = bptree_new(max_keys, compare_ints, NULL, NULL, NULL, debug_enabled);
+        bptree *tree =
+            bptree_new(max_keys, compare_ints, NULL, NULL, NULL, NULL, NULL, debug_enabled);
         if (!tree) {
             fprintf(stderr, "Failed to create tree\n");
             exit(1);
@@ -268,7 +263,8 @@ int main(void) {
     }
     {
         qsort(pointers, N, sizeof(void *), compare_ints_qsort);
-        bptree *tree = bptree_new(max_keys, compare_ints, NULL, NULL, NULL, debug_enabled);
+        bptree *tree =
+            bptree_new(max_keys, compare_ints, NULL, NULL, NULL, NULL, NULL, debug_enabled);
         if (!tree) {
             fprintf(stderr, "Failed to create tree\n");
             exit(1);
@@ -291,7 +287,8 @@ int main(void) {
     /* --- Range Search Benchmarks --- */
     {
         qsort(pointers, N, sizeof(void *), compare_ints_qsort);
-        bptree *tree = bptree_new(max_keys, compare_ints, NULL, NULL, NULL, debug_enabled);
+        bptree *tree =
+            bptree_new(max_keys, compare_ints, NULL, NULL, NULL, NULL, NULL, debug_enabled);
         if (!tree) {
             fprintf(stderr, "Failed to create tree\n");
             exit(1);
@@ -310,7 +307,7 @@ int main(void) {
             int count = 0;
             void **res = bptree_get_range(tree, pointers[idx], pointers[end_idx], &count);
             assert(count >= 0);
-            tree->free_fn(res);
+            tree->free_fn(res, 0, tree->alloc_ctx);
         });
         bptree_free(tree);
     }

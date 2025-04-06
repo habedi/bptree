@@ -16,12 +16,12 @@
 #include "bptree.h"
 
 /**
- * @brief Global flag for enabling/disabling debug logging.
+ * Global flag for enabling/disabling debug logging.
  */
 const bool debug_enabled = false;
 
 /**
- * @brief Comparison function for strings.
+ * Comparison function for strings.
  *
  * This function compares two strings using strcmp.
  *
@@ -36,15 +36,11 @@ int str_compare(const void *a, const void *b, const void *udata) {
 }
 
 /**
- * @brief Tests insertion and search functionality.
- *
- * This test creates a B+ tree, inserts three string items, verifies that
- * searching for an inserted key returns the correct value, and that a non-existent
- * key returns NULL.
+ * Tests insertion and search functionality.
  */
 void test_insertion_and_search() {
     printf("Test insertion and search...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     char *s1 = "apple", *s2 = "banana", *s3 = "cherry";
     assert(bptree_put(tree, s1) == BPTREE_OK);
@@ -59,15 +55,11 @@ void test_insertion_and_search() {
 }
 
 /**
- * @brief Tests deletion functionality.
- *
- * This test verifies that keys can be correctly removed from the tree.
- * It checks that a removed key cannot be retrieved and that attempting to remove
- * a non-existent key returns the proper status.
+ * Tests deletion functionality.
  */
 void test_deletion() {
     printf("Test deletion...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     char *arr[] = {"alpha", "beta", "gamma", "delta", "epsilon"};
     for (size_t i = 0; i < 5; i++) {
@@ -81,14 +73,11 @@ void test_deletion() {
 }
 
 /**
- * @brief Tests operations on an empty tree.
- *
- * This test creates an empty B+ tree and confirms that searching for any key
- * returns NULL and that removal attempts yield the BPTREE_NOT_FOUND status.
+ * Tests operations on an empty tree.
  */
 void test_empty_tree() {
     printf("Test operations on an empty tree...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     assert(bptree_get(tree, "anything") == NULL);
     assert(bptree_remove(tree, "anything") == BPTREE_NOT_FOUND);
@@ -97,14 +86,11 @@ void test_empty_tree() {
 }
 
 /**
- * @brief Tests handling of duplicate insertions.
- *
- * This test verifies that attempting to insert a duplicate key results in the
- * BPTREE_DUPLICATE status and that the tree still returns the original key.
+ * Tests handling of duplicate insertions.
  */
 void test_duplicate_insertion() {
     printf("Test duplicate insertion...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     char *dup = "duplicate";
     assert(bptree_put(tree, dup) == BPTREE_OK);
@@ -116,14 +102,11 @@ void test_duplicate_insertion() {
 }
 
 /**
- * @brief Tests B+ tree functionality with a single element.
- *
- * This test inserts a single element into the tree, verifies that it can be
- * retrieved, then removes it and confirms that it is no longer present.
+ * Tests B+ tree functionality with a single element.
  */
 void test_single_element() {
     printf("Test single element tree...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     char *solo = "solo";
     assert(bptree_put(tree, solo) == BPTREE_OK);
@@ -136,14 +119,11 @@ void test_single_element() {
 }
 
 /**
- * @brief Tests insertion and retrieval using long string keys.
- *
- * This test creates two long strings, inserts them into the tree, and checks
- * that they are correctly retrievable. It also tests deletion of one long string.
+ * Tests insertion and retrieval using long string keys.
  */
 void test_long_string_keys() {
     printf("Test long string keys...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     char long1[1024], long2[1024];
     memset(long1, 'a', sizeof(long1) - 1);
@@ -163,15 +143,11 @@ void test_long_string_keys() {
 }
 
 /**
- * @brief Tests mixed operations including insertion, deletion, and retrieval.
- *
- * This test performs a series of mixed operations on the B+ tree. It first inserts a set of keys,
- * deletes some, then inserts additional keys, and finally verifies that all operations produce
- * the expected results.
+ * Tests mixed operations including insertion, deletion, and retrieval.
  */
 void test_mixed_operations() {
     printf("Test mixed operations...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     char *keys1[] = {"one", "two", "three", "four", "five"};
     const size_t count1 = sizeof(keys1) / sizeof(keys1[0]);
@@ -199,14 +175,11 @@ void test_mixed_operations() {
 }
 
 /**
- * @brief Tests repeated deletion of non-existent keys.
- *
- * This test inserts a few keys and then attempts to remove keys that are not present,
- * verifying that the proper not-found status is returned.
+ * Tests repeated deletion of non-existent keys.
  */
 void test_repeated_nonexistent_deletion() {
     printf("Test repeated deletion of non-existent keys...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     assert(bptree_put(tree, "alpha") == BPTREE_OK);
     assert(bptree_put(tree, "beta") == BPTREE_OK);
@@ -217,13 +190,11 @@ void test_repeated_nonexistent_deletion() {
 }
 
 /**
- * @brief Tests insertion, retrieval, and deletion of an empty string key.
- *
- * This test verifies that an empty string can be used as a key by the tree.
+ * Tests insertion, retrieval, and deletion of an empty string key.
  */
 void test_empty_string_key() {
     printf("Test empty string key...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     char *empty = "";
     assert(bptree_put(tree, empty) == BPTREE_OK);
@@ -236,13 +207,11 @@ void test_empty_string_key() {
 }
 
 /**
- * @brief Tests reinsertion of a key after it has been deleted.
- *
- * This test verifies that a key can be inserted again after being removed.
+ * Tests reinsertion of a key after it has been deleted.
  */
 void test_reinsertion_after_deletion() {
     printf("Test reinsertion after deletion...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     char *key = "reinsertion";
     assert(bptree_put(tree, key) == BPTREE_OK);
@@ -255,14 +224,11 @@ void test_reinsertion_after_deletion() {
 }
 
 /**
- * @brief Tests basic range search functionality.
- *
- * This test inserts several keys and then performs a range search from "banana" to "fig",
- * verifying that the correct keys are returned.
+ * Tests basic range search functionality.
  */
 void test_range_search_basic() {
     printf("Test range search (basic)...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     char *keys[] = {"apple", "banana", "cherry", "date", "fig", "grape"};
     const size_t n = sizeof(keys) / sizeof(keys[0]);
@@ -276,20 +242,17 @@ void test_range_search_basic() {
     assert(strcmp(range[1], "cherry") == 0);
     assert(strcmp(range[2], "date") == 0);
     assert(strcmp(range[3], "fig") == 0);
-    tree->free_fn(range);
+    tree->free_fn(range, 0, tree->alloc_ctx); /* Size is ignored by default_free */
     bptree_free(tree);
     printf("Basic range search passed.\n");
 }
 
 /**
- * @brief Tests range search when no keys fall within the specified range.
- *
- * This test ensures that a range search returns an empty result when the range
- * does not match any keys in the tree.
+ * Tests range search when no keys fall within the specified range.
  */
 void test_range_search_empty() {
     printf("Test range search (empty range)...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     char *keys[] = {"apple", "banana", "cherry"};
     const size_t n = sizeof(keys) / sizeof(keys[0]);
@@ -299,20 +262,17 @@ void test_range_search_empty() {
     int count = 0;
     void **range = bptree_get_range(tree, "date", "fig", &count);
     assert(count == 0);
-    tree->free_fn(range);
+    tree->free_fn(range, 0, tree->alloc_ctx);
     bptree_free(tree);
     printf("Empty range search passed.\n");
 }
 
 /**
- * @brief Tests range search over the full set of keys.
- *
- * This test inserts several keys and performs a range search covering the entire range,
- * verifying that all keys are returned.
+ * Tests range search over the full set of keys.
  */
 void test_range_search_full() {
     printf("Test range search (full range)...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     char *keys[] = {"apple", "banana", "cherry", "date", "fig", "grape"};
     const size_t n = sizeof(keys) / sizeof(keys[0]);
@@ -322,20 +282,17 @@ void test_range_search_full() {
     int count = 0;
     void **range = bptree_get_range(tree, "apple", "grape", &count);
     assert(count == 6);
-    tree->free_fn(range);
+    tree->free_fn(range, 0, tree->alloc_ctx);
     bptree_free(tree);
     printf("Full range search passed.\n");
 }
 
 /**
- * @brief Tests range search with boundary conditions.
- *
- * This test verifies that range searches correctly handle cases where the
- * lower and upper boundaries match keys in the tree.
+ * Tests range search with boundary conditions.
  */
 void test_range_search_boundaries() {
     printf("Test range search (boundary conditions)...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     char *keys[] = {"apple", "banana", "cherry", "date", "fig", "grape"};
     const size_t n = sizeof(keys) / sizeof(keys[0]);
@@ -346,22 +303,19 @@ void test_range_search_boundaries() {
     void **range = bptree_get_range(tree, "cherry", "cherry", &count);
     assert(count == 1);
     assert(strcmp(range[0], "cherry") == 0);
-    tree->free_fn(range);
+    tree->free_fn(range, 0, tree->alloc_ctx);
     count = 0;
     range = bptree_get_range(tree, "aardvark", "blueberry", &count);
     assert(count == 2);
     assert(strcmp(range[0], "apple") == 0);
     assert(strcmp(range[1], "banana") == 0);
-    tree->free_fn(range);
+    tree->free_fn(range, 0, tree->alloc_ctx);
     bptree_free(tree);
     printf("Boundary range search passed.\n");
 }
 
 /**
- * @brief Tests the bulk loading of a sorted array of keys.
- *
- * This test allocates an array of keys, bulk loads them into the B+ tree, and
- * then verifies that each key can be retrieved.
+ * Tests the bulk loading of a sorted array of keys.
  */
 void test_bulk_load_sorted() {
     printf("Test bulk load (sorted input)...\n");
@@ -371,8 +325,8 @@ void test_bulk_load_sorted() {
         keys[i] = malloc(16);
         sprintf(keys[i], "key%03d", i);
     }
-    bptree *tree =
-        bptree_bulk_load(5, str_compare, NULL, NULL, NULL, debug_enabled, (void **)keys, N);
+    bptree *tree = bptree_bulk_load(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled,
+                                    (void **)keys, N);
     assert(tree != NULL);
     for (int i = 0; i < N; i++) {
         const char *res = bptree_get(tree, keys[i]);
@@ -387,26 +341,22 @@ void test_bulk_load_sorted() {
 }
 
 /**
- * @brief Tests bulk loading with an empty array.
- *
- * This test verifies that attempting to bulk load an empty array returns NULL.
+ * Tests bulk loading with an empty array.
  */
 void test_bulk_load_empty() {
     printf("Test bulk load (empty array)...\n");
-    bptree *tree = bptree_bulk_load(5, str_compare, NULL, NULL, NULL, debug_enabled, NULL, 0);
+    bptree *tree =
+        bptree_bulk_load(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled, NULL, 0);
     assert(tree == NULL);
     printf("Bulk load (empty array) passed.\n");
 }
 
 /**
- * @brief Tests the iterator functionality of the B+ tree.
- *
- * This test inserts several keys, creates an iterator, and then iterates through
- * the tree, verifying that the number of iterated elements matches the tree's count.
+ * Tests the iterator functionality of the B+ tree.
  */
 void test_iterator() {
     printf("Test iterator...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     char *keys[] = {"ant", "bee", "cat", "dog", "eel", "fox"};
     const size_t n = sizeof(keys) / sizeof(keys[0]);
@@ -420,20 +370,17 @@ void test_iterator() {
         count++;
     }
     assert(count == tree->count);
-    bptree_iterator_free(iter, tree->free_fn);
+    bptree_iterator_free(iter, tree->free_fn, tree->alloc_ctx);
     bptree_free(tree);
     printf("Iterator passed.\n");
 }
 
 /**
- * @brief Tests retrieval of tree statistics.
- *
- * This test inserts several keys into the tree and then verifies that the
- * statistics (item count, tree height, and node count) are correctly reported.
+ * Tests retrieval of tree statistics.
  */
 void test_tree_stats() {
     printf("Test tree stats...\n");
-    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, debug_enabled);
+    bptree *tree = bptree_new(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled);
     assert(tree != NULL);
     bptree_stats stats = bptree_get_stats(tree);
     assert(stats.count == 0);
@@ -451,15 +398,9 @@ void test_tree_stats() {
 }
 
 /**
- * @brief Main function to run all the tests.
- *
- * This function calls each test function in sequence and prints a success
- * message if all tests pass.
- *
- * @return Exit status.
+ * Main function to run all the tests.
  */
 int main(void) {
-    // Run all tests
     test_insertion_and_search();
     test_deletion();
     test_empty_tree();

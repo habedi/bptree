@@ -21,10 +21,6 @@ max_line_length = 100
 max_line_length = 120
 trim_trailing_whitespace = false # Don't remove trailing whitespace in Markdown files
 
-# Bash scripts
-[*.sh]
-indent_size = 2
-
 # YAML files
 [*.{yml,yaml}]
 indent_size = 2

@@ -1,6 +1,5 @@
 #define BPTREE_IMPLEMENTATION
 #include <stdio.h>
-#include <string.h>
 
 #include "bptree.h"
 
@@ -20,7 +19,8 @@ int record_compare(const void *a, const void *b, const void *udata) {
 
 int main() {
     // Create a new B+ tree instance. We set max_keys to 4 for this example.
-    bptree *tree = bptree_new(4, record_compare, NULL, NULL, NULL, true);  // debug_enabled = true
+    // Passing NULL for user_data, alloc_ctx, and custom allocators uses the defaults.
+    bptree *tree = bptree_new(4, record_compare, NULL, NULL, NULL, NULL, NULL, true);
     if (!tree) {
         printf("Failed to create the tree\n");
         return 1;
@@ -69,9 +69,9 @@ int main() {
             struct record *r = range_results[i];
             printf("  id=%d, name=%s\n", r->id, r->name);
         }
-        // Free the results array returned by bptree_get_range
-        tree->free_fn(
-            range_results);  // Always use tree->free_fn to free memory allocated by the tree
+        // Free the results array returned by bptree_get_range.
+        // Pass 0 for the size as the default free ignores it.
+        tree->free_fn(range_results, 0, tree->alloc_ctx);
     }
 
     // Iterate through the whole tree using the iterator
@@ -82,7 +82,7 @@ int main() {
         struct record *r = item;
         printf("  id=%d, name=%s\n", r->id, r->name);
     }
-    bptree_iterator_free(iter, tree->free_fn);
+    bptree_iterator_free(iter, tree->free_fn, tree->alloc_ctx);
 
     // Remove a record
     bptree_status status = bptree_remove(tree, &rec2);

@@ -1,3 +1,11 @@
+/**
+ * @file example.c
+ * @brief Example usages
+ *
+ * The example demonstrates how to create a B+ tree, insert records, retrieve records,
+ * and perform range queries.
+ */
+
 #define BPTREE_IMPLEMENTATION
 #include <stdio.h>
 
@@ -37,7 +45,7 @@ int main() {
     struct record rec8 = {8, "H"};
     struct record rec9 = {9, "I"};
 
-    // Insert records into the tree (not sorted by id for demonstration)
+    // Insert records into the tree (not sorted)
     bptree_put(tree, &rec1);
     bptree_put(tree, &rec2);
     bptree_put(tree, &rec3);
@@ -50,8 +58,14 @@ int main() {
     bptree_put(tree, &rec4);
     bptree_put(tree, &rec5);
 
+    // Try inserting a duplicate record
+    bptree_status dup_status = bptree_put(tree, &rec3);
+    if (dup_status == BPTREE_DUPLICATE) {
+        printf("Duplicate insert for id=%d correctly rejected.\n", rec3.id);
+    }
+
     // Retrieve a record by key (id)
-    struct record key = {3, ""};
+    const struct record key = {3, ""};
     struct record *result = bptree_get(tree, &key);
     if (result) {
         printf("Found record: id=%d, name=%s\n", result->id, result->name);
@@ -60,6 +74,7 @@ int main() {
     }
 
     // Perform a range search: get records with id between 2 and 4 (including boundaries)
+    // Note that only the `id` field is relevant here since the comparator uses it.
     int count = 0;
     void **range_results =
         bptree_get_range(tree, &(struct record){2, ""}, &(struct record){4, ""}, &count);
@@ -85,7 +100,7 @@ int main() {
     bptree_iterator_free(iter, tree->free_fn, tree->alloc_ctx);
 
     // Remove a record
-    bptree_status status = bptree_remove(tree, &rec2);
+    const bptree_status status = bptree_remove(tree, &rec2);
     if (status == BPTREE_OK) {
         printf("Record with id=%d removed successfully.\n", rec2.id);
     } else {
@@ -101,7 +116,7 @@ int main() {
     }
 
     // Check the tree stats
-    bptree_stats stats = bptree_get_stats(tree);
+    const bptree_stats stats = bptree_get_stats(tree);
     printf("Count: %d, Height: %d, Nodes: %d\n", stats.count, stats.height, stats.node_count);
 
     // Free the tree

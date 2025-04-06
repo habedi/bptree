@@ -1,0 +1,57 @@
+digraph BPlusTreeLogo {
+    fontname = "Helvetica,Arial,sans-serif";
+    layout = dot;
+    rankdir = TB;
+    splines = polyline;
+    nodesep = 0.4;
+    ranksep = 0.7;
+
+    // Node base style
+    node [
+    fontname = "Helvetica,Arial,sans-serif",
+    fontsize = 10,
+    shape = box,
+    style = "filled",
+    penwidth = 1.8,
+    width = 0.7,
+    height = 0.4,
+    margin = "0.08,0.05"
+    ];
+
+    edge [
+    color = "black",
+    arrowsize = 0.7,
+    penwidth = 1.2
+    ];
+
+    // Root node
+    root [label = "• | •", fillcolor = "#D6EAF8", color = "#5499C7"];
+
+    // Internal nodes
+    intL [label = "• | •", fillcolor = "#E8DAEF", color = "#8E44AD"];
+    intR [label = "• | •", fillcolor = "#E8DAEF", color = "#8E44AD"];
+    root -> intL;
+    root -> intR;
+
+    // Leaf nodes
+    l1 [label = "• •", fillcolor = "#D5F5E3", color = "#28B463"];
+    l2 [label = "• •", fillcolor = "#D5F5E3", color = "#28B463"];
+    l3 [label = "• •", fillcolor = "#D5F5E3", color = "#28B463"];
+    l4 [label = "• •", fillcolor = "#D5F5E3", color = "#28B463"];
+    l5 [label = "• •", fillcolor = "#D5F5E3", color = "#28B463"];
+
+    intL -> l1;
+    intL -> l2;
+    intR -> l3;
+    intR -> l4;
+    intR -> l5;
+
+    // Keep all leaves at same vertical level
+    { rank = same; l1; l2; l3; l4; l5 }
+
+    // Dotted leaf chaining to show sequential access
+    l1 -> l2 [style = dotted, color = "gray40"];
+    l2 -> l3 [style = dotted, color = "gray40"];
+    l3 -> l4 [style = dotted, color = "gray40"];
+    l4 -> l5 [style = dotted, color = "gray40"];
+}

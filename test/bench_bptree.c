@@ -2,9 +2,8 @@
  * @file bench_bptree.c
  * @brief Benchmarks and performance tests for the Bptree library.
  *
- * This file benchmarks bulk loading, insertion, search, iteration, deletion,
- * and range search operations on a B+ tree using both random and sequential
- * input. It also includes helper functions for shuffling arrays and comparing integers.
+ * This file includes benchmarks for bulk loading, insertion, search, iteration, deletion,
+ * and range search operations using both random and sequential input data.
  */
 
 #define BPTREE_IMPLEMENTATION
@@ -17,7 +16,7 @@
 #include "bptree.h"
 
 /**
- * Global flag to enable or disable debug logging.
+ * Global flag to enable or disable debug logging at runtime.
  */
 const bool debug_enabled = false;
 

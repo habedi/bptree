@@ -1,3 +1,6 @@
+# General Variables
+SHELL := bash
+
 # Build configuration
 CC ?= clang
 ENABLE_ASAN ?= 0
@@ -8,6 +11,7 @@ BIN_DIR    := bin
 TEST_DIR   := test
 INC_DIR    := include
 DOC_DIR    := doc
+ASSET_DIR := assets
 
 # Flags
 CFLAGS_BASE := -Wall -Wextra -pedantic -std=c11 -I$(INC_DIR)
@@ -59,7 +63,7 @@ $(BIN_DIR)/%: $(TEST_DIR)/%.c | $(BIN_DIR)
 ##############################################################################################################
 
 .PHONY: all
-all: test bench example doc ## Build everything, run tests, benchmarks, and generate docs
+all: clean test bench example doc ## Build everything, run tests, benchmarks, and generate docs
 
 .PHONY: test
 test: $(TEST_BINARY) ## Build and run tests
@@ -107,7 +111,7 @@ uninstall: ## Remove installed header file
 install-deps: ## Install development dependencies (Debian-based)
 	@echo "Installing development dependencies..."
 	sudo apt-get update && sudo apt-get install -y \
-		gcc gdb clang clang-format clang-tools cppcheck valgrind \
+		gcc gdb clang clang-format clang-tools cppcheck valgrind graphviz \
 		kcachegrind graphviz linux-tools-common linux-tools-generic linux-tools-$(shell uname -r)
 
 .PHONY: coverage
@@ -126,13 +130,18 @@ doc: ## Generate documentation using Doxygen
 	@test -f Doxyfile || { echo "Error: Doxyfile not found."; exit 1; }
 	doxygen Doxyfile
 
+.PHONY: figure
+figure: ## Generate figures using Graphviz
+	@echo "Generating figures..."
+	@$(SHELL) $(ASSET_DIR)/make_figures.sh $(ASSET_DIR)
+
 ##############################################################################################################
 ## Release and Debugging Targets
 ##############################################################################################################
 
 .PHONY: release
 release: BUILD_TYPE=release
-release: all ## Build everything in release mode
+release: all ## Like 'all', but builds with code optimizations
 	@echo "Built in release mode."
 
 .PHONY: memcheck

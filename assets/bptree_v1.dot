@@ -1,0 +1,113 @@
+digraph BPlusTree {
+    fontname = "Helvetica,Arial,sans-serif";
+    layout = dot;
+    rankdir = TB;
+    splines = polyline;
+    nodesep = 0.3;
+    ranksep = 0.6;
+
+    node [
+    fontname = "Helvetica,Arial,sans-serif",
+    fontsize = 10,
+    shape = box,
+    style = "filled",
+    color = "gray90",
+    penwidth = 1.5,
+    margin = "0.1,0.05"
+    ];
+
+    edge [
+    fontname = "Helvetica,Arial,sans-serif",
+    fontsize = 9,
+    color = "black"
+    ];
+
+    // Root
+    root [label = "13"];
+
+    // Internal Nodes
+    intL [label = "4 | 7"];
+    intR [label = "17 | 24"];
+    root -> intL;
+    root -> intR;
+
+    // Leaf Nodes
+    l1 [label = "1 | 3 | 4"];
+    l2 [label = "5 | 6"];
+    l3 [label = "7"];
+    l4 [label = "11 | 12 | 13"];
+    l5 [label = "14 | 16"];
+    l6 [label = "17"];
+    l7 [label = "19 | 23"];
+    l8 [label = "24"];
+    l9 [label = "25 | 26"];
+
+    // Internal to Leaves
+    intL -> l1;
+    intL -> l2;
+    intL -> l3;
+    intL -> l4;
+
+    intR -> l5;
+    intR -> l6;
+    intR -> l7;
+    intR -> l8;
+    intR -> l9;
+
+    // Rank leaves on same level
+    { rank = same; l1; l2; l3; l4; l5; l6; l7; l8; l9; }
+
+    // Leaf chaining (dotted)
+    l1 -> l2 [style = dotted];
+    l2 -> l3 [style = dotted];
+    l3 -> l4 [style = dotted];
+    l4 -> l5 [style = dotted];
+    l5 -> l6 [style = dotted];
+    l6 -> l7 [style = dotted];
+    l7 -> l8 [style = dotted];
+    l8 -> l9 [style = dotted];
+
+    // Records
+    r1 [label = "R1", shape = circle, style = filled, fillcolor = "white"];
+    r3 [label = "R3", shape = circle, style = filled, fillcolor = "white"];
+    r4 [label = "R4", shape = circle, style = filled, fillcolor = "white"];
+    r5 [label = "R5", shape = circle, style = filled, fillcolor = "white"];
+    r6 [label = "R6", shape = circle, style = filled, fillcolor = "white"];
+    r7 [label = "R7", shape = circle, style = filled, fillcolor = "white"];
+    r12 [label = "R12", shape = circle, style = filled, fillcolor = "white"];
+    r13 [label = "R13", shape = circle, style = filled, fillcolor = "white"];
+    r14 [label = "R14", shape = circle, style = filled, fillcolor = "white"];
+    r16 [label = "R16", shape = circle, style = filled, fillcolor = "white"];
+    r17 [label = "R17", shape = circle, style = filled, fillcolor = "white"];
+    r19 [label = "R19", shape = circle, style = filled, fillcolor = "white"];
+    r23 [label = "R23", shape = circle, style = filled, fillcolor = "white"];
+    r24 [label = "R24", shape = circle, style = filled, fillcolor = "white"];
+    r25 [label = "R25", shape = circle, style = filled, fillcolor = "white"];
+    r26 [label = "R26", shape = circle, style = filled, fillcolor = "white"];
+
+    // Records under leaves
+    l1 -> r1;
+    l1 -> r3;
+    l1 -> r4;
+
+    l2 -> r5;
+    l2 -> r6;
+
+    l3 -> r7;
+
+    l4 -> r12;
+    l4 -> r13;
+
+    l5 -> r14;
+    l5 -> r16;
+
+    l6 -> r17;
+
+    l7 -> r19;
+    l7 -> r23;
+
+    l8 -> r24;
+
+    l9 -> r25;
+    l9 -> r26;
+}

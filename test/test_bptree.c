@@ -3,8 +3,8 @@
  * @brief Unit tests for the Bptree library.
  *
  * This file implements a series of tests to verify the behavior of Bptree.
- * It tests insertion, deletion, search, range queries,
- * bulk loading, iteration, and tree statistics.
+ * It tests insertion, deletion, search, range queries, bulk loading, iteration, and tree
+ * statistics.
  */
 
 #define BPTREE_IMPLEMENTATION
@@ -319,7 +319,7 @@ void test_range_search_boundaries() {
  */
 void test_bulk_load_sorted() {
     printf("Test bulk load (sorted input)...\n");
-    int N = 100;
+    const int N = 100;
     char **keys = malloc(N * sizeof(char *));
     for (int i = 0; i < N; i++) {
         keys[i] = malloc(16);
@@ -345,7 +345,7 @@ void test_bulk_load_sorted() {
  */
 void test_bulk_load_empty() {
     printf("Test bulk load (empty array)...\n");
-    bptree *tree =
+    const bptree *tree =
         bptree_bulk_load(5, str_compare, NULL, NULL, NULL, NULL, NULL, debug_enabled, NULL, 0);
     assert(tree == NULL);
     printf("Bulk load (empty array) passed.\n");

@@ -137,6 +137,11 @@ temp/
 poetry.lock
 
 # Additional files and directories to ignore (put below)
-doc/html
+doc
 target
 *.log\.*
+profile_report.txt
+perf.data
+*.old
+*.folded
+*.perf

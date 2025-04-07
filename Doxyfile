@@ -15,6 +15,7 @@ INPUT              = .
 FILE_PATTERNS      = *.c *.h *.cpp *.hpp
 RECURSIVE          = YES
 EXTRACT_ALL        = YES
+EXCLUDE_PATTERNS   = tmp
 
 #---------------------------------------------------------------------------
 # Output formats

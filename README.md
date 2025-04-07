@@ -1,24 +1,42 @@
-## Bptree
+<div align="center">
+
+<picture>
+    <img alt="B+ tree" src="assets/bptree_v4.svg" height="90%" width="90%">
+</picture>
+<br>
+
+<h2>Bptree</h2>
 
 [![Tests](https://img.shields.io/github/actions/workflow/status/habedi/bptree/tests.yml?label=tests&style=flat&labelColor=282c34&logo=github)](https://github.com/habedi/bptree/actions/workflows/tests.yml)
 [![Lints](https://img.shields.io/github/actions/workflow/status/habedi/bptree/lints.yml?label=lints&style=flat&labelColor=282c34&logo=github)](https://github.com/habedi/bptree/actions/workflows/lints.yml)
-[![Benches](https://img.shields.io/github/actions/workflow/status/habedi/bptree/benches.yml?label=benches&style=flat&labelColor=282c34&logo=github)](https://github.com/habedi/bptree/actions/workflows/benches.yml)
+[![Benchmarks](https://img.shields.io/github/actions/workflow/status/habedi/bptree/benches.yml?label=benches&style=flat&labelColor=282c34&logo=github)](https://github.com/habedi/bptree/actions/workflows/benches.yml)
 [![Code Coverage](https://img.shields.io/codecov/c/github/habedi/bptree?label=coverage&style=flat&labelColor=282c34&logo=codecov)](https://codecov.io/gh/habedi/bptree)
 [![CodeFactor](https://img.shields.io/codefactor/grade/github/habedi/bptree?label=code%20quality&style=flat&labelColor=282c34&logo=codefactor)](https://www.codefactor.io/repository/github/habedi/bptree)
 [![License](https://img.shields.io/badge/license-MIT-007ec6?label=license&style=flat&labelColor=282c34&logo=open-source-initiative)](https://github.com/habedi/bptree/blob/main/LICENSE)
 [![Release](https://img.shields.io/github/release/habedi/bptree.svg?label=release&style=flat&labelColor=282c34&logo=github)](https://github.com/habedi/bptree/releases/latest)
 
-Bptree is a [B+tree](https://en.wikipedia.org/wiki/B%2B_tree) implementation in pure C.
+A B+ tree implementation in C
+
+</div>
+
+---
+
+Bptree is a single-header, generic [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree) implementation written in pure C.
 
 ### Features
 
 - Single-header C library (see [include/bptree.h](include/bptree.h))
 - Generic pointer storage with custom key comparator
-- Supports insertion, deletion, point and range queries
+- Supports insertion, deletion, point, and range queries
 - Supports bulk loading from sorted items
 - In-order iteration using an iterator API
-- Custom memory allocator support via user-provided `malloc` and `free` functions
+- Custom memory allocator support via user-provided `malloc`, `free`, and `realloc` functions
 - Compatible with C99 and newer
+
+> [!NOTE]
+> Bptree is in early stage of development, so breaking (API) changes may happen.
+> Additionally, it is not thoroughly tested and benchmarked yet, so it may have lots of bugs and performance issues.
+> Currently, it is more for educational purposes to learn about B+ trees than for real-world usage.
 
 ---
 
@@ -39,7 +57,6 @@ To run the example shown below, run the `make example` command.
 ```c
 #define BPTREE_IMPLEMENTATION
 #include <stdio.h>
-#include <string.h>
 
 #include "bptree.h"
 
@@ -58,10 +75,11 @@ int record_compare(const void *a, const void *b, const void *udata) {
 }
 
 int main() {
-    // Create a new B+tree instance. We set max_keys to 4 for this example.
-    bptree *tree = bptree_new(4, record_compare, NULL, NULL, NULL, true);  // debug_enabled = true
+    // Create a new B+ tree instance. We set max_keys to 4 for this example.
+    // Passing NULL for user_data, alloc_ctx, and custom allocators uses the defaults.
+    bptree *tree = bptree_new(4, record_compare, NULL, NULL, NULL, NULL, NULL, true);
     if (!tree) {
-        printf("Failed to create B+tree\n");
+        printf("Failed to create the tree\n");
         return 1;
     }
 
@@ -76,7 +94,7 @@ int main() {
     struct record rec8 = {8, "H"};
     struct record rec9 = {9, "I"};
 
-    // Insert records into the tree (not sorted by id for demonstration)
+    // Insert records into the tree (not sorted)
     bptree_put(tree, &rec1);
     bptree_put(tree, &rec2);
     bptree_put(tree, &rec3);
@@ -88,9 +106,15 @@ int main() {
 
     bptree_put(tree, &rec4);
     bptree_put(tree, &rec5);
+    
+    // Try inserting a duplicate record
+    bptree_status dup_status = bptree_put(tree, &rec3);
+    if (dup_status == BPTREE_DUPLICATE) {
+        printf("Duplicate insert for id=%d correctly rejected.\n", rec3.id);
+    }
 
     // Retrieve a record by key (id)
-    struct record key = {3, ""};
+    const struct record key = {3, ""};
     struct record *result = bptree_get(tree, &key);
     if (result) {
         printf("Found record: id=%d, name=%s\n", result->id, result->name);
@@ -99,6 +123,7 @@ int main() {
     }
 
     // Perform a range search: get records with id between 2 and 4 (including boundaries)
+    // Note that only the `id` field is relevant here since the comparator uses it.
     int count = 0;
     void **range_results =
         bptree_get_range(tree, &(struct record){2, ""}, &(struct record){4, ""}, &count);
@@ -108,9 +133,9 @@ int main() {
             struct record *r = range_results[i];
             printf("  id=%d, name=%s\n", r->id, r->name);
         }
-        // Free the results array returned by bptree_get_range
-        tree->free_fn(
-            range_results);  // Always use tree->free_fn to free memory allocated by the tree
+        // Free the results array returned by bptree_get_range.
+        // Pass 0 for the size as the default free ignores it.
+        tree->free_fn(range_results, 0, tree->alloc_ctx);
     }
 
     // Iterate through the whole tree using the iterator
@@ -121,10 +146,10 @@ int main() {
         struct record *r = item;
         printf("  id=%d, name=%s\n", r->id, r->name);
     }
-    bptree_iterator_free(iter, tree->free_fn);
+    bptree_iterator_free(iter, tree->free_fn, tree->alloc_ctx);
 
     // Remove a record
-    bptree_status status = bptree_remove(tree, &rec2);
+    const bptree_status status = bptree_remove(tree, &rec2);
     if (status == BPTREE_OK) {
         printf("Record with id=%d removed successfully.\n", rec2.id);
     } else {
@@ -140,7 +165,7 @@ int main() {
     }
 
     // Check the tree stats
-    bptree_stats stats = bptree_get_stats(tree);
+    const bptree_stats stats = bptree_get_stats(tree);
     printf("Count: %d, Height: %d, Nodes: %d\n", stats.count, stats.height, stats.node_count);
 
     // Free the tree
@@ -158,19 +183,23 @@ use `make doc` command and then open the `doc/html/index.html` file in a web bro
 
 #### API
 
-| Function               | Description                                                                                                                                                                                                                                                                 |
-|------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `bptree_new`           | Creates a new B+tree instance. Accepts maximum keys per node, a key comparison function (which must return -1, 0, or 1 like `strcmp`), user data, optional custom memory allocation/free functions, and a debug flag. Returns a pointer to the new tree or NULL on failure. |
-| `bptree_free`          | Frees the tree along with all its associated memory and nodes.                                                                                                                                                                                                              |
-| `bptree_put`           | Inserts an item into the tree. Fails with `BPTREE_DUPLICATE` if the key already exists.                                                                                                                                                                                     |
-| `bptree_get`           | Retrieves an item from the tree by key. Returns a pointer to the item if found, or NULL if the key does not exist.                                                                                                                                                          |
-| `bptree_remove`        | Removes an item from the tree by key and rebalances the tree if necessary. Returns a status code (e.g., `BPTREE_OK`, `BPTREE_NOT_FOUND`, etc.).                                                                                                                             |
-| `bptree_get_range`     | Performs an inclusive range search. Returns an array of items with keys between the specified start and end values (inclusive), and stores the number of items found in a count variable. The returned array must be freed using the tree’s `free_fn` function.             |
-| `bptree_bulk_load`     | Builds a B+tree from a sorted array of distinct items. Much faster than inserting items individually. Useful for initialization or loading large datasets.                                                                                                                  |
-| `bptree_iterator_new`  | Creates a new iterator starting from the smallest key in the tree. Returns NULL if the tree is empty.                                                                                                                                                                       |
-| `bptree_iterator_next` | Returns the next item in key order. Returns NULL when iteration is complete.                                                                                                                                                                                                |
-| `bptree_iterator_free` | Frees the iterator. Uses the tree's `free_fn` for deallocation.                                                                                                                                                                                                             |
-| `bptree_get_stats`     | Returns statistics about the tree, including the number of items, height, and node count.                                                                                                                                                                                   |
+| Function / Type                                        | Description                                                                                                                                                                                                         |
+|--------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `bptree_new`                                           | Creates a new B+ tree. It takes max keys, a key comparator (must return negative/zero/positive similar to `strcmp`), optional user data, custom allocators, and a debug flag. Returns a pointer or NULL on failure. |
+| `bptree_free`                                          | Frees all nodes and internal structures. Does **not** free user-provided items.                                                                                                                                     |
+| `bptree_put`                                           | Inserts an item. Returns `BPTREE_DUPLICATE` if the key already exists.                                                                                                                                              |
+| `bptree_get`                                           | Retrieves an item by key. Returns the item pointer or NULL if not found.                                                                                                                                            |
+| `bptree_remove`                                        | Removes an item by key and rebalances the tree if needed. Returns a status code (`BPTREE_OK`, `BPTREE_NOT_FOUND`, etc.).                                                                                            |
+| `bptree_get_range`                                     | Returns an array of items between `start_key` and `end_key` (inclusive). Stores the number of results in a count variable. Must free the result array using `free_fn` (size can be 0).                              |
+| `bptree_bulk_load`                                     | Builds a tree from a sorted, deduplicated array of items. Much faster than inserting one by one.                                                                                                                    |
+| `bptree_iterator_new`                                  | Returns an iterator (`bptree_iterator *`) starting at the smallest key. Returns NULL if the tree is empty.                                                                                                          |
+| `bptree_iterator_next`                                 | Returns the next item in key order by walking linked leaf nodes. Returns NULL when iteration is complete.                                                                                                           |
+| `bptree_iterator_free`                                 | Frees the iterator. You must pass the `free_fn` and `alloc_ctx` used to allocate it.                                                                                                                                |
+| `bptree_get_stats`                                     | Returns a `bptree_stats` struct with total item count, tree height, and total node count.                                                                                                                           |
+| `bptree_iterator`                                      | Struct for maintaining state during in-order traversal. Contains current leaf and position.                                                                                                                         |
+| `bptree_stats`                                         | Struct returned by `bptree_get_stats`, includes `count`, `height`, and `node_count` fields.                                                                                                                         |
+| `bptree_malloc_t`, `bptree_free_t`, `bptree_realloc_t` | Function pointer types for custom allocators. See `bptree.h` for exact signatures. Used in `bptree_new` and `bptree_bulk_load`.                                                                                     |
+| `debug_enabled`                                        | Boolean flag in `bptree_new` that enables internal debug logging to stdout via `bptree_logger`.                                                                                                                     |
 
 #### Status Codes
 
@@ -178,11 +207,11 @@ The status codes are defined in the `bptree.h` header file as an enum:
 
 ```c
 typedef enum {
-    BPTREE_OK, // Operation completed successfully
-    BPTREE_DUPLICATE, // Attempted to insert a duplicate key
-    BPTREE_ALLOCATION_ERROR, // Memory allocation failed
-    BPTREE_NOT_FOUND, // Key not found in the tree
-    BPTREE_ERROR // A general error occurred
+    BPTREE_OK,               /* Operation performed successfully */
+    BPTREE_DUPLICATE,        /* Duplicate key found during insertion */
+    BPTREE_ALLOCATION_ERROR, /* Memory allocation error */
+    BPTREE_NOT_FOUND,        /* Key not found */
+    BPTREE_ERROR             /* General error */
 } bptree_status;
 ```
 

@@ -2,7 +2,7 @@
 SHELL := bash
 
 # Build configuration
-CC ?= clang
+CC ?= gcc # or clang
 ENABLE_ASAN ?= 0
 BUILD_TYPE ?= debug
 
@@ -164,9 +164,11 @@ profile: clean $(BENCH_BINARY) ## Build and run with gprof profiling
 .PHONY: ubsan
 ubsan: CFLAGS += -fsanitize=undefined
 ubsan: LDFLAGS += -fsanitize=undefined
-ubsan: clean $(TEST_BINARY) ## Run tests with UndefinedBehaviorSanitizer
+ubsan: clean $(TEST_BINARY) $(BENCH_BINARY) $(EXAMPLE_BINARY) ## Run `undefined behavior sanitizer` tests
 	@echo "Running UBSan tests..."
+	UBSAN_OPTIONS=print_stacktrace=1 ./$(EXAMPLE_BINARY)
 	UBSAN_OPTIONS=print_stacktrace=1 ./$(TEST_BINARY)
+	UBSAN_OPTIONS=print_stacktrace=1 ./$(BENCH_BINARY)
 
 .PHONY: analyze
 analyze: ## Run Clang Static Analyzer

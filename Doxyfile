@@ -1,8 +1,8 @@
-# Doxyfile simplified configuration
+# Doxyfile configuration
 # Doxygen version 1.9.8
 
 #---------------------------------------------------------------------------
-# Project related settings
+# Project-related settings
 #---------------------------------------------------------------------------
 PROJECT_NAME       = "Bptree"
 OUTPUT_DIRECTORY   = doc

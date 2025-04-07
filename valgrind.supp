@@ -1,6 +1,5 @@
-# This is an example Valgrind suppression file for a C project.
-# It suppresses common false-positive errors coming from the C standard library.
-
+# Suppressions for Valgrind
+# Suppressions for glibc functions
 {
    glibc_strdup_suppression
    Memcheck:Leak

@@ -1,484 +1,751 @@
-/**
- * @file test_bptree.c
- * @brief Unit tests for the Bptree library.
- *
- * This file tests insertion, deletion, upsert, search, range queries,
- * bulk loading, iteration, tree statistics, invariant checking, and
- * additional edge cases for each key type.
- */
-
 #include <assert.h>
-#include <limits.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+#ifndef DEFAULT_MAX_KEYS
+#define DEFAULT_MAX_KEYS 32
+#endif
 
 #define BPTREE_IMPLEMENTATION
 #include "bptree.h"
 
-/* --- Helper for Key Conversion --- */
-/* For string keys, bptree_key_t is a struct with a fixed array.
-   The helper function make_key() converts a C string into a bptree_key_t.
-   For numeric keys, we use the value directly.
-*/
+const bool global_debug_enabled = false;
+static const int test_max_keys_values[] = {3, 4, 7, DEFAULT_MAX_KEYS};
+static const int num_test_max_keys = sizeof(test_max_keys_values) / sizeof(test_max_keys_values[0]);
+static int tests_run = 0;
+static int tests_failed = 0;
+#define FAIL(msg, ...)                                                                \
+    do {                                                                              \
+        fprintf(stderr, "FAIL(%s:%d): " msg "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
+        tests_failed++;                                                               \
+    } while (0)
+#define ASSERT(condition, msg, ...)                                           \
+    do {                                                                      \
+        if (!(condition)) {                                                   \
+            FAIL("Assertion Failed: (" #condition ") - " msg, ##__VA_ARGS__); \
+        }                                                                     \
+    } while (0)
+#define RUN_TEST(test)                             \
+    do {                                           \
+        fprintf(stderr, "== Running %s\n", #test); \
+        test();                                    \
+        tests_run++;                               \
+    } while (0)
 #ifdef BPTREE_KEY_TYPE_STRING
-static bptree_key_t make_key(const char *s) {
+#define MAX_ALLOC_TRACK 256
+static void *alloc_track[MAX_ALLOC_TRACK];
+static int alloc_track_count = 0;
+static void track_alloc(void *ptr) {
+    if (alloc_track_count < MAX_ALLOC_TRACK) {
+        alloc_track[alloc_track_count++] = ptr;
+    }
+}
+static void cleanup_alloc_track(void) {
+    for (int i = 0; i < alloc_track_count; i++) {
+        free(alloc_track[i]);
+    }
+    alloc_track_count = 0;
+}
+static bptree_key_t make_key_str(const char *s) {
     bptree_key_t key;
-    strncpy(key.data, s, BPTREE_KEY_SIZE);
-    key.data[BPTREE_KEY_SIZE - 1] = '\0';
+    memset(&key, 0, sizeof(key));
+    snprintf(key.data, BPTREE_KEY_SIZE, "%s", s);
     return key;
 }
-#define KEY(s) (make_key(s))
+#define KEY(s) (make_key_str(s))
+#define MAKE_VALUE_STR(s) (strdup(s))
+#define GET_VALUE_STR(v) ((const char *)(v))
+#define CMP_VALUE_STR(v1, v2) (strcmp(GET_VALUE_STR(v1), GET_VALUE_STR(v2)) == 0)
+#define FREE_VALUE_STR(v) (free((void *)(v)))
 #else
 #define KEY(s) (s)
-#endif
-
-/* Global flag for debug logging */
-const bool debug_enabled = false;
-
-/* --- Tests --- */
-
-void test_insertion_and_search() {
-    printf("Test insertion and search...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-#ifdef BPTREE_KEY_TYPE_STRING
-    assert(bptree_put(tree, &KEY("apple"), "apple") == BPTREE_OK);
-    assert(bptree_put(tree, &KEY("banana"), "banana") == BPTREE_OK);
-    assert(bptree_put(tree, &KEY("cherry"), "cherry") == BPTREE_OK);
-    const char *res = bptree_get(tree, &KEY("banana"));
-    assert(res && strcmp(res, "banana") == 0);
-    res = bptree_get(tree, &KEY("durian"));
-    assert(res == NULL);
-#else
-    const int a = 1, b = 2, c = 3, d = 4;
-    assert(bptree_put(tree, &a, (bptree_value_t)(intptr_t)a) == BPTREE_OK);
-    assert(bptree_put(tree, &b, (bptree_value_t)(intptr_t)b) == BPTREE_OK);
-    assert(bptree_put(tree, &c, (bptree_value_t)(intptr_t)c) == BPTREE_OK);
-    bptree_value_t res_val = bptree_get(tree, &b);
-    assert(res_val == (bptree_value_t)(intptr_t)b);
-    res_val = bptree_get(tree, &d);
-    assert(res_val == 0);
-#endif
-    bptree_assert_invariants(tree);
-    bptree_free(tree);
-    printf("Insertion and search passed.\n");
-}
-
-void test_deletion() {
-    printf("Test deletion...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-#ifdef BPTREE_KEY_TYPE_STRING
-    const char *arr[] = {"alpha", "beta", "gamma", "delta", "epsilon"};
-    int n = sizeof(arr) / sizeof(arr[0]);
-    for (int i = 0; i < n; i++) {
-        assert(bptree_put(tree, &KEY(arr[i]), arr[i]) == BPTREE_OK);
-    }
-    assert(bptree_remove(tree, &KEY("gamma")) == BPTREE_OK);
-    assert(bptree_get(tree, &KEY("gamma")) == NULL);
-    assert(bptree_remove(tree, &KEY("zeta")) == BPTREE_KEY_NOT_FOUND);
-#else
-    int arr[] = {10, 20, 30, 40, 50};
-    int n = sizeof(arr) / sizeof(arr[0]);
-    for (int i = 0; i < n; i++) {
-        assert(bptree_put(tree, &arr[i], (bptree_value_t)(intptr_t)arr[i]) == BPTREE_OK);
-    }
-    int key = 30;
-    assert(bptree_remove(tree, &key) == BPTREE_OK);
-    key = 30;
-    assert(bptree_get(tree, &key) == 0);
-    key = 60;
-    assert(bptree_remove(tree, &key) == BPTREE_KEY_NOT_FOUND);
-#endif
-    bptree_assert_invariants(tree);
-    bptree_free(tree);
-    printf("Deletion passed.\n");
-}
-
-void test_empty_tree() {
-    printf("Test empty tree operations...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-#ifdef BPTREE_KEY_TYPE_STRING
-    assert(bptree_get(tree, &KEY("anything")) == NULL);
-    assert(bptree_remove(tree, &KEY("anything")) == BPTREE_KEY_NOT_FOUND);
-#else
-    const int x = 100;
-    assert(bptree_get(tree, &x) == 0);
-    assert(bptree_remove(tree, &x) == BPTREE_KEY_NOT_FOUND);
-#endif
-    bptree_free(tree);
-    printf("Empty tree operations passed.\n");
-}
-
-void test_duplicate_insertion() {
-    printf("Test duplicate insertion...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-#ifdef BPTREE_KEY_TYPE_STRING
-    assert(bptree_put(tree, &KEY("duplicate"), "duplicate") == BPTREE_OK);
-    assert(bptree_put(tree, &KEY("duplicate"), "duplicate") == BPTREE_DUPLICATE_KEY);
-    const char *res = bptree_get(tree, &KEY("duplicate"));
-    assert(res && strcmp(res, "duplicate") == 0);
-#else
-    int d = 42;
-    assert(bptree_put(tree, &d, (bptree_value_t)(intptr_t)d) == BPTREE_OK);
-    assert(bptree_put(tree, &d, (bptree_value_t)(intptr_t)d) == BPTREE_DUPLICATE_KEY);
-    assert(bptree_get(tree, &d) == (bptree_value_t)(intptr_t)d);
-#endif
-    bptree_assert_invariants(tree);
-    bptree_free(tree);
-    printf("Duplicate insertion passed.\n");
-}
-
-void test_single_element() {
-    printf("Test single element tree...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-#ifdef BPTREE_KEY_TYPE_STRING
-    assert(bptree_put(tree, &KEY("solo"), "solo") == BPTREE_OK);
-    const char *res = bptree_get(tree, &KEY("solo"));
-    assert(res && strcmp(res, "solo") == 0);
-    assert(bptree_remove(tree, &KEY("solo")) == BPTREE_OK);
-    assert(bptree_get(tree, &KEY("solo")) == NULL);
-#else
-    int solo = 7;
-    assert(bptree_put(tree, &solo, (bptree_value_t)(intptr_t)solo) == BPTREE_OK);
-    assert(bptree_get(tree, &solo) == (bptree_value_t)(intptr_t)solo);
-    assert(bptree_remove(tree, &solo) == BPTREE_OK);
-    assert(bptree_get(tree, &solo) == 0);
-#endif
-    bptree_assert_invariants(tree);
-    bptree_free(tree);
-    printf("Single element tree passed.\n");
-}
-
-void test_upsert() {
-    printf("Test upsert operation...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-#ifdef BPTREE_KEY_TYPE_STRING
-    assert(bptree_upsert(tree, &KEY("upsert"), "initial") == BPTREE_OK);
-    const char *res = bptree_get(tree, &KEY("upsert"));
-    assert(res && strcmp(res, "initial") == 0);
-    assert(bptree_upsert(tree, &KEY("upsert"), "updated") == BPTREE_OK);
-    res = bptree_get(tree, &KEY("upsert"));
-    assert(res && strcmp(res, "updated") == 0);
-#else
-    int k = 10;
-    assert(bptree_upsert(tree, &k, (bptree_value_t)(intptr_t)100) == BPTREE_OK);
-    assert(bptree_get(tree, &k) == (bptree_value_t)(intptr_t)100);
-    int k2 = 10;
-    assert(bptree_upsert(tree, &k2, (bptree_value_t)(intptr_t)200) == BPTREE_OK);
-    assert(bptree_get(tree, &k) == (bptree_value_t)(intptr_t)200);
-#endif
-    bptree_assert_invariants(tree);
-    bptree_free(tree);
-    printf("Upsert passed.\n");
-}
-
-void test_bulk_load_sorted() {
-    printf("Test bulk load (sorted input)...\n");
-#ifdef BPTREE_KEY_TYPE_STRING
-    const int N = 100;
-    bptree_key_t *keys = malloc(N * sizeof(bptree_key_t));
-    bptree_value_t *values = malloc(N * sizeof(bptree_value_t));
-    char buf[32];
-    for (int i = 0; i < N; i++) {
-        sprintf(buf, "key%03d", i);
-        keys[i] = make_key(buf);
-        values[i] = strdup(buf);
-    }
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-    bptree_status st = bptree_bulk_load(tree, keys, values, N);
-    assert(st == BPTREE_OK);
-    for (int i = 0; i < N; i++) {
-        const char *res = bptree_get(tree, &keys[i]);
-        assert(res != NULL);
-        sprintf(buf, "key%03d", i);
-        assert(strcmp(res, buf) == 0);
-    }
-    bptree_assert_invariants(tree);
-    bptree_free(tree);
-    for (int i = 0; i < N; i++) {
-        free(values[i]);
-    }
-    free(keys);
-    free(values);
-#else
-    const int N = 100;
-    int *keys = malloc(N * sizeof(int));
-    bptree_value_t *values = malloc(N * sizeof(bptree_value_t));
-    for (int i = 0; i < N; i++) {
-        keys[i] = i;
-        values[i] = (bptree_value_t)(intptr_t)i;
-    }
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-    bptree_status st = bptree_bulk_load(tree, keys, values, N);
-    assert(st == BPTREE_OK);
-    for (int i = 0; i < N; i++) {
-        bptree_value_t res = bptree_get(tree, &keys[i]);
-        assert(res == (bptree_value_t)(intptr_t)i);
-    }
-    bptree_assert_invariants(tree);
-    bptree_free(tree);
-    free(keys);
-    free(values);
-#endif
-    printf("Bulk load (sorted) passed.\n");
-}
-
-void test_bulk_load_empty() {
-    printf("Test bulk load (empty array)...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-    bptree_status st = bptree_bulk_load(tree, NULL, NULL, 0);
-    assert(st == BPTREE_INVALID_ARGUMENT);
-    bptree_free(tree);
-    printf("Bulk load (empty array) passed.\n");
-}
-
-void test_range_query() {
-    printf("Test range query...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-#ifdef BPTREE_KEY_TYPE_STRING
-    char *keys[] = {"apple", "banana", "cherry", "date", "fig", "grape"};
-    int n = sizeof(keys) / sizeof(keys[0]);
-    for (int i = 0; i < n; i++) {
-        assert(bptree_put(tree, &KEY(keys[i]), keys[i]) == BPTREE_OK);
-    }
-    int count = 0;
-    bptree_value_t *range = bptree_get_range(tree, &KEY("banana"), &KEY("fig"), &count);
-    assert(count == 4);
-    assert(strcmp((char *)range[0], "banana") == 0);
-    assert(strcmp((char *)range[1], "cherry") == 0);
-    assert(strcmp((char *)range[2], "date") == 0);
-    assert(strcmp((char *)range[3], "fig") == 0);
-    free(range);
-#else
-    int keys[] = {10, 20, 30, 40, 50, 60};
-    int n = sizeof(keys) / sizeof(keys[0]);
-    for (int i = 0; i < n; i++) {
-        assert(bptree_put(tree, &keys[i], (bptree_value_t)(intptr_t)keys[i]) == BPTREE_OK);
-    }
-    int count = 0;
-    bptree_value_t *range = bptree_get_range(tree, &keys[1], &keys[4], &count);
-    assert(count == 4);
-    free(range);
-#endif
-    bptree_free(tree);
-    printf("Range query passed.\n");
-}
-
-void test_iterator() {
-    printf("Test iterator...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-#ifdef BPTREE_KEY_TYPE_STRING
-    char *keys[] = {"ant", "bee", "cat", "dog", "eel", "fox"};
-    int n = sizeof(keys) / sizeof(keys[0]);
-    for (int i = 0; i < n; i++) {
-        assert(bptree_put(tree, &KEY(keys[i]), keys[i]) == BPTREE_OK);
-    }
-#else
-    int keys[] = {1, 2, 3, 4, 5, 6};
-    int n = sizeof(keys) / sizeof(keys[0]);
-    for (int i = 0; i < n; i++) {
-        assert(bptree_put(tree, &keys[i], (bptree_value_t)(intptr_t)keys[i]) == BPTREE_OK);
-    }
-#endif
-    bptree_iterator *iter = bptree_iterator_new(tree);
-    assert(iter != NULL);
-    int count = 0;
-    while (bptree_iterator_next(iter) != NULL) {
-        count++;
-    }
-    assert(count == tree->count);
-    bptree_iterator_destroy(iter);
-    bptree_free(tree);
-    printf("Iterator passed.\n");
-}
-
-void test_tree_stats() {
-    printf("Test tree statistics...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-#ifdef BPTREE_KEY_TYPE_STRING
-    char *keys[] = {"a", "b", "c", "d", "e", "f", "g"};
-    int n = sizeof(keys) / sizeof(keys[0]);
-    for (int i = 0; i < n; i++) {
-        assert(bptree_put(tree, &KEY(keys[i]), keys[i]) == BPTREE_OK);
-    }
-#else
-    int keys[] = {1, 2, 3, 4, 5, 6, 7};
-    int n = sizeof(keys) / sizeof(keys[0]);
-    for (int i = 0; i < n; i++) {
-        assert(bptree_put(tree, &keys[i], (bptree_value_t)(intptr_t)keys[i]) == BPTREE_OK);
-    }
-#endif
-    bptree_stats stats = bptree_get_stats(tree);
-    assert(stats.count == tree->count);
-    assert(stats.height > 0);
-    assert(stats.node_count > 0);
-    bptree_free(tree);
-    printf("Tree statistics passed.\n");
-}
-
-void test_invariants() {
-    printf("Test invariants checking...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-#ifdef BPTREE_KEY_TYPE_STRING
-    char *keys[] = {"alpha", "beta", "gamma", "delta"};
-    int n = sizeof(keys) / sizeof(keys[0]);
-    for (int i = 0; i < n; i++) {
-        assert(bptree_put(tree, &KEY(keys[i]), keys[i]) == BPTREE_OK);
-    }
-#else
-    int keys[] = {30, 10, 20, 40};
-    int n = sizeof(keys) / sizeof(keys[0]);
-    for (int i = 0; i < n; i++) {
-        assert(bptree_put(tree, &keys[i], (bptree_value_t)(intptr_t)keys[i]) == BPTREE_OK);
-    }
-#endif
-    assert(bptree_check_invariants(tree));
-    bptree_assert_invariants(tree);
-    bptree_free(tree);
-    printf("Invariants checking passed.\n");
-}
-
-/* --- Additional Edge Cases Tests for All Key Types --- */
-
+#define MAKE_VALUE_NUM(k) ((bptree_value_t)(intptr_t)(k))
 #ifdef BPTREE_KEY_TYPE_INT
-#include <limits.h>
-void test_int_edge_cases() {
-    printf("Test int key edge cases...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-    int keys[] = {INT_MIN, -1, 0, 1, INT_MAX};
-    int n = sizeof(keys) / sizeof(keys[0]);
-    for (int i = 0; i < n; i++) {
-        assert(bptree_put(tree, &keys[i], (bptree_value_t)(intptr_t)keys[i]) == BPTREE_OK);
-    }
-    for (int i = 0; i < n; i++) {
-        bptree_value_t val = bptree_get(tree, &keys[i]);
-        assert(val == (bptree_value_t)(intptr_t)keys[i]);
-    }
-    // Test duplicate insertion
-    assert(bptree_put(tree, &keys[2], (bptree_value_t)(intptr_t)keys[2]) == BPTREE_DUPLICATE_KEY);
-    bptree_free(tree);
-    printf("Int key edge cases passed.\n");
+#define GET_VALUE_NUM(v) ((int)(intptr_t)(v))
+#endif
+#ifdef BPTREE_KEY_TYPE_FLOAT
+typedef union {
+    float f;
+    int i;
+} float_int_union;
+static int float_to_int_bits(float f) {
+    float_int_union u;
+    u.f = f;
+    return u.i;
 }
+static float int_bits_to_float(int i) {
+    float_int_union u;
+    u.i = i;
+    return u.f;
+}
+#define GET_VALUE_NUM(v) (int_bits_to_float((int)(intptr_t)(v)))
+#endif
+#ifdef BPTREE_KEY_TYPE_DOUBLE
+typedef union {
+    double d;
+    int64_t i;
+} double_int64_union;
+static int64_t double_to_int64_bits(double d) {
+    double_int64_union u;
+    u.d = d;
+    return u.i;
+}
+static double int64_bits_to_double(int64_t i) {
+    double_int64_union u;
+    u.i = i;
+    return u.d;
+}
+#define GET_VALUE_NUM(v) (int64_bits_to_double((int64_t)(intptr_t)(v)))
+#endif
+#define CMP_VALUE_NUM(v, k) (GET_VALUE_NUM(v) == (k))
+#define FREE_VALUE_STR(v) ((void)0)
 #endif
 
 #ifdef BPTREE_KEY_TYPE_FLOAT
-void test_float_edge_cases() {
-    printf("Test float key edge cases...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-    float keys[] = {-INFINITY, -123.456f, -0.0f, 0.0f, 123.456f, INFINITY};
-    int n = sizeof(keys) / sizeof(keys[0]);
-    for (int i = 0; i < n; i++) {
-        // Store the bit representation of the float as the value.
-        int rep;
-        memcpy(&rep, &keys[i], sizeof(rep));
-        assert(bptree_put(tree, &keys[i], (bptree_value_t)(intptr_t)rep) == BPTREE_OK);
+static bool is_nan_key(const bptree_key_t *k) { return isnan(*k); }
+static bool is_inf_key(const bptree_key_t *k) { return isinf(*k); }
+#endif
+#ifdef BPTREE_KEY_TYPE_DOUBLE
+static bool is_nan_key(const bptree_key_t *k) { return isnan(*k); }
+static bool is_inf_key(const bptree_key_t *k) { return isinf(*k); }
+#endif
+
+#ifdef BPTREE_KEY_TYPE_STRING
+static bptree *create_test_tree_with_order(int max_keys) {
+    return bptree_create(max_keys, NULL, global_debug_enabled);
+}
+#else
+static bptree *create_test_tree_with_order(int max_keys) {
+    return bptree_create(max_keys, NULL, global_debug_enabled);
+}
+#endif
+
+void test_creation_failure(void) {
+    bptree *tree = bptree_create(2, NULL, global_debug_enabled);
+    ASSERT(tree == NULL, "bptree_create should fail for max_keys < 3");
+}
+
+void test_insertion_and_search(void) {
+    for (int m = 0; m < num_test_max_keys; m++) {
+        int order = test_max_keys_values[m];
+        bptree *tree = create_test_tree_with_order(order);
+        ASSERT(tree != NULL, "Tree creation failed for order %d", order);
+        const int N = 10;
+#ifdef BPTREE_KEY_TYPE_STRING
+        char key_buf[32];
+        for (int i = 0; i < N; i++) {
+            sprintf(key_buf, "key%d", i);
+            bptree_key_t k = KEY(key_buf);
+            char *v = strdup(key_buf);
+            track_alloc(v);
+            ASSERT(bptree_put(tree, &k, v) == BPTREE_OK, "Insert failed for key %s", key_buf);
+        }
+        for (int i = 0; i < N; i++) {
+            sprintf(key_buf, "key%d", i);
+            bptree_key_t k = KEY(key_buf);
+            const char *res = GET_VALUE_STR(bptree_get(tree, &k));
+            ASSERT(res != NULL, "Get failed for existing key %s", key_buf);
+            ASSERT(strcmp(res, key_buf) == 0, "Value mismatch for key %s", key_buf);
+        }
+#else
+        for (int i = 0; i < N; i++) {
+            int k = i * 10 + 1;
+            ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK, "Insert failed for key %d",
+                   k);
+        }
+        for (int i = 0; i < N; i++) {
+            int k = i * 10 + 1;
+            bptree_value_t res_val = bptree_get(tree, &k);
+            ASSERT(res_val != NULL, "Get failed for key %d", k);
+            ASSERT(CMP_VALUE_NUM(res_val, k), "Value mismatch for key %d", k);
+        }
+#endif
+        bptree_assert_invariants(tree);
+        bptree_free(tree);
+#ifdef BPTREE_KEY_TYPE_STRING
+        cleanup_alloc_track();
+#endif
     }
-    for (int i = 0; i < n; i++) {
-        int rep;
-        memcpy(&rep, &keys[i], sizeof(rep));
-        bptree_value_t res = bptree_get(tree, &keys[i]);
-        assert(res == (bptree_value_t)(intptr_t)rep);
+}
+
+void test_deletion(void) {
+    for (int m = 0; m < num_test_max_keys; m++) {
+        int order = test_max_keys_values[m];
+        bptree *tree = create_test_tree_with_order(order);
+        ASSERT(tree != NULL, "Tree creation failed for order %d", order);
+        const int N = 7;
+#ifdef BPTREE_KEY_TYPE_STRING
+        char key_buf[32];
+        for (int i = 0; i < N; i++) {
+            sprintf(key_buf, "del%d", i);
+            bptree_key_t k = KEY(key_buf);
+            char *v = strdup(key_buf);
+            track_alloc(v);
+            ASSERT(bptree_put(tree, &k, v) == BPTREE_OK, "Insert failed");
+        }
+        ASSERT(tree->count == N, "Count mismatch after insertion");
+        bptree_key_t k_del = KEY("del3");
+        ASSERT(bptree_remove(tree, &k_del) == BPTREE_OK, "Remove middle key failed");
+        ASSERT(bptree_get(tree, &k_del) == NULL, "Get succeeded for deleted key");
+        ASSERT(tree->count == N - 1, "Count mismatch after deletion");
+#else
+        for (int i = 0; i < N; i++) {
+            int k = i + 1;
+            ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK, "Insert failed");
+        }
+        ASSERT(tree->count == N, "Count mismatch after insertion");
+        int k_del = 4;
+        ASSERT(bptree_remove(tree, &k_del) == BPTREE_OK, "Remove key failed");
+        ASSERT(bptree_get(tree, &k_del) == NULL, "Get succeeded for deleted key");
+        ASSERT(tree->count == N - 1, "Count mismatch after deletion");
+#endif
+        bptree_free(tree);
+#ifdef BPTREE_KEY_TYPE_STRING
+        cleanup_alloc_track();
+#endif
     }
-    float key = 999.999f;
-    assert(bptree_get(tree, &key) == 0);
+}
+
+void test_empty_tree(void) {
+    for (int m = 0; m < num_test_max_keys; m++) {
+        int order = test_max_keys_values[m];
+        bptree *tree = create_test_tree_with_order(order);
+#ifdef BPTREE_KEY_TYPE_STRING
+        bptree_key_t k = KEY("anything");
+        ASSERT(bptree_get(tree, &k) == NULL, "Get on empty tree failed");
+        ASSERT(bptree_remove(tree, &k) == BPTREE_KEY_NOT_FOUND, "Remove on empty tree failed");
+#else
+        int k = 101;
+        ASSERT(bptree_get(tree, &k) == NULL, "Get on empty tree failed");
+        ASSERT(bptree_remove(tree, &k) == BPTREE_KEY_NOT_FOUND, "Remove on empty tree failed");
+#endif
+        bptree_stats stats = bptree_get_stats(tree);
+        ASSERT(stats.count == 0, "Empty tree count non-zero");
+        ASSERT(stats.height == 1, "Empty tree height not 1");
+        ASSERT(stats.node_count == 1, "Empty tree node_count not 1");
+        bptree_free(tree);
+    }
+}
+
+void test_duplicate_insertion(void) {
+    for (int m = 0; m < num_test_max_keys; m++) {
+        int order = test_max_keys_values[m];
+        bptree *tree = create_test_tree_with_order(order);
+#ifdef BPTREE_KEY_TYPE_STRING
+        bptree_key_t k = KEY("duplicate");
+        char *v1 = strdup("value1");
+        char *v2 = strdup("value2");
+        track_alloc(v1);
+        track_alloc(v2);
+        ASSERT(bptree_put(tree, &k, v1) == BPTREE_OK, "First put failed");
+        ASSERT(bptree_put(tree, &k, v2) == BPTREE_DUPLICATE_KEY,
+               "Second put did not return DUPLICATE_KEY");
+        const char *res = GET_VALUE_STR(bptree_get(tree, &k));
+        ASSERT(res != NULL, "Get after duplicate put failed");
+        ASSERT(strcmp(res, "value1") == 0, "Value was overwritten after duplicate put");
+#else
+        int k = 42;
+        ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(100)) == BPTREE_OK, "First put failed");
+        ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(200)) == BPTREE_DUPLICATE_KEY,
+               "Second put failed");
+        bptree_value_t res_val = bptree_get(tree, &k);
+        ASSERT(res_val != NULL, "Get after duplicate put failed");
+        ASSERT(GET_VALUE_NUM(res_val) == 100, "Value overwritten after duplicate put");
+#endif
+        bptree_assert_invariants(tree);
+        bptree_free(tree);
+#ifdef BPTREE_KEY_TYPE_STRING
+        cleanup_alloc_track();
+#endif
+    }
+}
+
+void test_single_element(void) {
+    for (int m = 0; m < num_test_max_keys; m++) {
+        int order = test_max_keys_values[m];
+        bptree *tree = create_test_tree_with_order(order);
+#ifdef BPTREE_KEY_TYPE_STRING
+        bptree_key_t k = KEY("solo");
+        char *v = strdup("solo_val");
+        track_alloc(v);
+        ASSERT(bptree_put(tree, &k, v) == BPTREE_OK, "Put failed");
+        const char *res = GET_VALUE_STR(bptree_get(tree, &k));
+        ASSERT(res && strcmp(res, "solo_val") == 0, "Get failed");
+        ASSERT(bptree_remove(tree, &k) == BPTREE_OK, "Remove failed");
+        ASSERT(bptree_get(tree, &k) == NULL, "Get after remove failed");
+#else
+        int k = 7;
+        ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK, "Put failed");
+        bptree_value_t res_val = bptree_get(tree, &k);
+        ASSERT(res_val != NULL && GET_VALUE_NUM(res_val) == k, "Get failed");
+        ASSERT(bptree_remove(tree, &k) == BPTREE_OK, "Remove failed");
+        ASSERT(bptree_get(tree, &k) == NULL, "Get after remove failed");
+#endif
+        bptree_stats stats = bptree_get_stats(tree);
+        ASSERT(stats.count == 0, "Count non-zero after single element removal");
+        bptree_assert_invariants(tree);
+        bptree_free(tree);
+#ifdef BPTREE_KEY_TYPE_STRING
+        cleanup_alloc_track();
+#endif
+    }
+}
+
+void test_upsert(void) {
+    for (int m = 0; m < num_test_max_keys; m++) {
+        int order = test_max_keys_values[m];
+        bptree *tree = create_test_tree_with_order(order);
+#ifdef BPTREE_KEY_TYPE_STRING
+        bptree_key_t k = KEY("upsert_key");
+        char *v_initial = strdup("initial");
+        char *v_updated = strdup("updated");
+        track_alloc(v_initial);
+        track_alloc(v_updated);
+        ASSERT(bptree_upsert(tree, &k, v_initial) == BPTREE_OK, "Initial upsert failed");
+        const char *res = GET_VALUE_STR(bptree_get(tree, &k));
+        ASSERT(res && strcmp(res, "initial") == 0, "Get after initial upsert failed");
+        ASSERT(tree->count == 1, "Count wrong after initial upsert");
+        ASSERT(bptree_upsert(tree, &k, v_updated) == BPTREE_OK, "Updating upsert failed");
+        res = GET_VALUE_STR(bptree_get(tree, &k));
+        ASSERT(res && strcmp(res, "updated") == 0, "Get after updating upsert failed");
+#else
+        int k = 10;
+        ASSERT(bptree_upsert(tree, &k, MAKE_VALUE_NUM(100)) == BPTREE_OK, "Initial upsert failed");
+        bptree_value_t res_val = bptree_get(tree, &k);
+        ASSERT(res_val != NULL && GET_VALUE_NUM(res_val) == 100, "Get after initial upsert failed");
+        ASSERT(tree->count == 1, "Count wrong after initial upsert");
+        int k2 = 10;
+        ASSERT(bptree_upsert(tree, &k2, MAKE_VALUE_NUM(200)) == BPTREE_OK,
+               "Updating upsert failed");
+        res_val = bptree_get(tree, &k);
+        ASSERT(res_val != NULL && GET_VALUE_NUM(res_val) == 200,
+               "Get after updating upsert failed");
+        ASSERT(tree->count == 1, "Count wrong after updating upsert");
+#endif
+        bptree_assert_invariants(tree);
+        bptree_free(tree);
+#ifdef BPTREE_KEY_TYPE_STRING
+        cleanup_alloc_track();
+#endif
+    }
+}
+
+void test_bulk_load_sorted(void) {
+    const int N = 153;
+    for (int m = 0; m < num_test_max_keys; m++) {
+        int order = test_max_keys_values[m];
+        bptree *tree = create_test_tree_with_order(order);
+#ifdef BPTREE_KEY_TYPE_STRING
+        bptree_key_t *keys = malloc(N * sizeof(bptree_key_t));
+        bptree_value_t *values = malloc(N * sizeof(bptree_value_t));
+        ASSERT(keys && values, "Allocation for bulk load arrays failed");
+        char buf[32];
+        for (int i = 0; i < N; i++) {
+            sprintf(buf, "bulk%04d", i);
+            keys[i] = KEY(buf);
+            values[i] = MAKE_VALUE_STR(buf);
+            track_alloc(values[i]);
+            ASSERT(values[i] != NULL, "strdup failed for value %d", i);
+        }
+        bptree_status st = bptree_bulk_load(tree, keys, values, N);
+        ASSERT(st == BPTREE_OK, "Bulk load failed with status %d", st);
+        ASSERT(tree->count == N, "Tree count mismatch after bulk load");
+        bptree_assert_invariants(tree);
+        for (int i = 0; i < N; i++) {
+            const char *res = GET_VALUE_STR(bptree_get(tree, &keys[i]));
+            ASSERT(res != NULL, "Get failed for bulk-loaded key index %d", i);
+            ASSERT(strcmp(res, GET_VALUE_STR(values[i])) == 0, "Value mismatch for key index %d",
+                   i);
+        }
+        free(keys);
+        free(values);
+#else
+        bptree_key_t *keys = malloc(N * sizeof(bptree_key_t));
+        bptree_value_t *values = malloc(N * sizeof(bptree_value_t));
+        ASSERT(keys && values, "Allocation for bulk load arrays failed");
+        for (int i = 0; i < N; i++) {
+            keys[i] = i * 10 + 1;
+            values[i] = MAKE_VALUE_NUM(keys[i]);
+        }
+        bptree_status st = bptree_bulk_load(tree, keys, values, N);
+        ASSERT(st == BPTREE_OK, "Bulk load failed with status %d", st);
+        ASSERT(tree->count == N, "Tree count mismatch after bulk load");
+        bptree_assert_invariants(tree);
+        for (int i = 0; i < N; i++) {
+            bptree_value_t res = bptree_get(tree, &keys[i]);
+            ASSERT(res != NULL, "Get failed for bulk-loaded key index %d", i);
+            ASSERT(CMP_VALUE_NUM(res, keys[i]), "Value mismatch for key index %d", i);
+        }
+        free(keys);
+        free(values);
+#endif
+        bptree_free(tree);
+#ifdef BPTREE_KEY_TYPE_STRING
+        cleanup_alloc_track();
+#endif
+    }
+}
+
+void test_bulk_load_failures(void) {
+    for (int m = 0; m < num_test_max_keys; m++) {
+        int order = test_max_keys_values[m];
+        bptree *tree = create_test_tree_with_order(order);
+#ifdef BPTREE_KEY_TYPE_STRING
+        bptree_key_t *keys = malloc(10 * sizeof(bptree_key_t));
+        bptree_value_t *values = malloc(10 * sizeof(bptree_value_t));
+        char buf[32];
+        sprintf(buf, "key%d", 5);
+        keys[0] = KEY(buf);
+        values[0] = MAKE_VALUE_STR(buf);
+        sprintf(buf, "key%d", 1);
+        keys[1] = KEY(buf);
+        values[1] = MAKE_VALUE_STR(buf);
+        bptree_status st = bptree_bulk_load(tree, keys, values, 2);
+        ASSERT(st == BPTREE_BULK_LOAD_NOT_SORTED, "Bulk load did not detect unsorted input");
+        FREE_VALUE_STR(values[0]);
+        FREE_VALUE_STR(values[1]);
+        ASSERT(tree->count == 0 && (tree->root == NULL || tree->root->num_keys == 0),
+               "Tree not empty after failed bulk load");
+        sprintf(buf, "key%d", 1);
+        keys[0] = KEY(buf);
+        values[0] = MAKE_VALUE_STR(buf);
+        sprintf(buf, "key%d", 1);
+        keys[1] = KEY(buf);
+        values[1] = MAKE_VALUE_STR(buf);
+        sprintf(buf, "key%d", 2);
+        keys[2] = KEY(buf);
+        values[2] = MAKE_VALUE_STR(buf);
+        st = bptree_bulk_load(tree, keys, values, 3);
+        ASSERT(st == BPTREE_BULK_LOAD_DUPLICATE, "Bulk load did not detect duplicate input");
+        FREE_VALUE_STR(values[0]);
+        FREE_VALUE_STR(values[1]);
+        FREE_VALUE_STR(values[2]);
+        ASSERT(tree->count == 0 && (tree->root == NULL || tree->root->num_keys == 0),
+               "Tree not empty after failed bulk load");
+        free(keys);
+        free(values);
+#else
+        bptree_key_t *keys = malloc(10 * sizeof(bptree_key_t));
+        bptree_value_t *values = malloc(10 * sizeof(bptree_value_t));
+        keys[0] = 51;
+        values[0] = MAKE_VALUE_NUM(51);
+        keys[1] = 11;
+        values[1] = MAKE_VALUE_NUM(11);
+        bptree_status st = bptree_bulk_load(tree, keys, values, 2);
+        ASSERT(st == BPTREE_BULK_LOAD_NOT_SORTED, "Bulk load did not detect unsorted input");
+        ASSERT(tree->count == 0 && (tree->root == NULL || tree->root->num_keys == 0),
+               "Tree not empty after failed bulk load");
+        keys[0] = 11;
+        values[0] = MAKE_VALUE_NUM(11);
+        keys[1] = 11;
+        values[1] = MAKE_VALUE_NUM(11);
+        keys[2] = 21;
+        values[2] = MAKE_VALUE_NUM(21);
+        st = bptree_bulk_load(tree, keys, values, 3);
+        ASSERT(st == BPTREE_BULK_LOAD_DUPLICATE, "Bulk load did not detect duplicate input");
+        ASSERT(tree->count == 0 && (tree->root == NULL || tree->root->num_keys == 0),
+               "Tree not empty after failed bulk load");
+        free(keys);
+        free(values);
+#endif
+        bptree_free(tree);
+#ifdef BPTREE_KEY_TYPE_STRING
+        cleanup_alloc_track();
+#endif
+    }
+}
+
+void test_bulk_load_empty(void) {
+    for (int m = 0; m < num_test_max_keys; m++) {
+        int order = test_max_keys_values[m];
+        bptree *tree = create_test_tree_with_order(order);
+        bptree_status st = bptree_bulk_load(tree, NULL, NULL, 0);
+        ASSERT(st == BPTREE_INVALID_ARGUMENT,
+               "Bulk load with 0 items did not return INVALID_ARGUMENT");
+        bptree_free(tree);
+    }
+}
+
+void test_range_query(void) {
+    for (int m = 0; m < num_test_max_keys; m++) {
+        int order = test_max_keys_values[m];
+        bptree *tree = create_test_tree_with_order(order);
+        const int N = 10;
+#ifdef BPTREE_KEY_TYPE_STRING
+        bptree_value_t *allocated_values[N];
+        char key_buf[32];
+        for (int i = 0; i < N; i++) {
+            sprintf(key_buf, "range%02d", i);
+            bptree_key_t k = KEY(key_buf);
+            allocated_values[i] = MAKE_VALUE_STR(key_buf);
+            track_alloc(allocated_values[i]);
+            ASSERT(bptree_put(tree, &k, allocated_values[i]) == BPTREE_OK, "Insert failed");
+        }
+        bptree_key_t start_k = KEY("range03");
+        bptree_key_t end_k = KEY("range07");
+        int count = 0;
+        bptree_value_t *range = bptree_get_range(tree, &start_k, &end_k, &count);
+        ASSERT(range != NULL, "Range query returned NULL (Case 1)");
+        ASSERT(count == 5, "Range count mismatch (Case 1): expected 5, got %d", count);
+        ASSERT(strcmp(GET_VALUE_STR(range[0]), "range03") == 0,
+               "Range value mismatch (Case 1, Idx 0)");
+        ASSERT(strcmp(GET_VALUE_STR(range[4]), "range07") == 0,
+               "Range value mismatch (Case 1, Idx 4)");
+        free(range);
+#else
+        for (int i = 0; i < N; i++) {
+            int k = i * 10 + 1;
+            ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK, "Insert failed");
+        }
+        int start_k = 21;
+        int end_k = 61;
+        int count = 0;
+        bptree_value_t *range = bptree_get_range(tree, &start_k, &end_k, &count);
+        ASSERT(range != NULL, "Range query returned NULL (Case 1)");
+        ASSERT(count == 5, "Range count mismatch (Case 1): expected 5, got %d", count);
+        ASSERT(GET_VALUE_NUM(range[0]) == 21, "Range value mismatch (Case 1, Idx 0)");
+        ASSERT(GET_VALUE_NUM(range[4]) == 61, "Range value mismatch (Case 1, Idx 4)");
+        free(range);
+#endif
+        bptree_free(tree);
+#ifdef BPTREE_KEY_TYPE_STRING
+        cleanup_alloc_track();
+#endif
+    }
+}
+
+void test_iterator(void) {
+    for (int m = 0; m < num_test_max_keys; m++) {
+        int order = test_max_keys_values[m];
+        bptree *tree = create_test_tree_with_order(order);
+        const int N = 6;
+#ifdef BPTREE_KEY_TYPE_STRING
+        char *keys[] = {"ant", "bee", "cat", "dog", "eel", "fox"};
+        bptree_value_t allocated_values[N];
+        char *expected_str_values[N];
+        for (int i = 0; i < N; i++) {
+            bptree_key_t k = KEY(keys[i]);
+            allocated_values[i] = MAKE_VALUE_STR(keys[i]);
+            track_alloc(allocated_values[i]);
+            expected_str_values[i] = keys[i];
+            ASSERT(bptree_put(tree, &k, allocated_values[i]) == BPTREE_OK, "Insert failed");
+        }
+#else
+        int keys[] = {11, 22, 33, 44, 55, 66};
+        int expected_values[N];
+        for (int i = 0; i < N; i++) {
+            expected_values[i] = keys[i];
+            ASSERT(bptree_put(tree, &keys[i], MAKE_VALUE_NUM(keys[i])) == BPTREE_OK,
+                   "Insert failed");
+        }
+#endif
+        bptree_iterator *iter = bptree_iterator_new(tree);
+        ASSERT(iter != NULL, "Iterator creation failed");
+        int count = 0;
+        bptree_value_t val;
+        while ((val = bptree_iterator_next(iter)) != NULL) {
+#ifdef BPTREE_KEY_TYPE_STRING
+            ASSERT(CMP_VALUE_STR(val, expected_str_values[count]),
+                   "Iterator value mismatch at index %d: expected '%s', got '%s'", count,
+                   expected_str_values[count], GET_VALUE_STR(val));
+#else
+            ASSERT(CMP_VALUE_NUM(val, expected_values[count]),
+                   "Iterator value mismatch at index %d", count);
+#endif
+            count++;
+        }
+        ASSERT(count == N, "Iterator returned wrong number of items: expected %d, got %d", N,
+               count);
+        ASSERT(bptree_iterator_next(iter) == NULL, "Iterator did not return NULL after finishing");
+        bptree_iterator_destroy(iter);
+        bptree_free(tree);
+#ifdef BPTREE_KEY_TYPE_STRING
+        cleanup_alloc_track();
+#endif
+    }
+}
+
+void test_tree_stats(void) {
+    for (int m = 0; m < num_test_max_keys; m++) {
+        int order = test_max_keys_values[m];
+        bptree *tree = create_test_tree_with_order(order);
+        bptree_stats stats = bptree_get_stats(tree);
+        ASSERT(stats.count == 0, "Initial count wrong");
+        ASSERT(stats.height == 1, "Initial height wrong");
+        ASSERT(stats.node_count == 1, "Initial node_count wrong");
+        const int N = 150;
+#ifdef BPTREE_KEY_TYPE_STRING
+        char key_buf[32];
+        for (int i = 0; i < N; i++) {
+            sprintf(key_buf, "stat%d", i);
+            ASSERT(bptree_put(tree, &KEY(key_buf), NULL) == BPTREE_OK, "Insert failed");
+        }
+#else
+        for (int i = 0; i < N; i++) {
+            int k = i + 1;
+            ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK, "Insert failed");
+        }
+#endif
+        stats = bptree_get_stats(tree);
+        ASSERT(stats.count == N, "Final count wrong: expected %d, got %d", N, stats.count);
+        ASSERT(stats.height > 1, "Final height not greater than 1");
+        ASSERT(stats.node_count > 1, "Final node_count not greater than 1");
+        int expected_min_nodes = N / DEFAULT_MAX_KEYS;
+        ASSERT(stats.node_count >= expected_min_nodes,
+               "Node count %d is lower than expected minimum %d", stats.node_count,
+               expected_min_nodes);
+        bptree_free(tree);
+    }
+}
+
+#ifdef BPTREE_KEY_TYPE_FLOAT
+void test_comparator_edge_cases_float(void) {
+    bptree *tree = create_test_tree_with_order(5);
+    float nan = NAN, inf = INFINITY, ninf = -INFINITY, negzero = -0.0f, poszero = 0.0f,
+          normal = 1.23f;
+    ASSERT(bptree_put(tree, &inf, MAKE_VALUE_NUM(100)) == BPTREE_OK, "Insert inf failed");
+    ASSERT(bptree_put(tree, &ninf, MAKE_VALUE_NUM(200)) == BPTREE_OK, "Insert -inf failed");
+    ASSERT(bptree_put(tree, &normal, MAKE_VALUE_NUM(300)) == BPTREE_OK, "Insert normal failed");
+    ASSERT(bptree_put(tree, &negzero, MAKE_VALUE_NUM(400)) == BPTREE_OK, "Insert -0.0 failed");
+    ASSERT(bptree_put(tree, &poszero, MAKE_VALUE_NUM(500)) == BPTREE_OK, "Insert 0.0 failed");
+    ASSERT(bptree_get(tree, &inf) != NULL, "Get inf failed");
+    ASSERT(bptree_get(tree, &ninf) != NULL, "Get -inf failed");
+    ASSERT(bptree_get(tree, &normal) != NULL, "Get normal failed");
+    ASSERT(bptree_get(tree, &negzero) != NULL, "Get -0.0 failed");
+    ASSERT(bptree_get(tree, &poszero) != NULL, "Get 0.0 failed");
+    if (!is_nan_key(&nan)) {
+    }
     bptree_free(tree);
-    printf("Float key edge cases passed.\n");
 }
 #endif
 
 #ifdef BPTREE_KEY_TYPE_DOUBLE
-void test_double_edge_cases() {
-    printf("Test double key edge cases...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-    double keys[] = {-INFINITY, -123456.789, -0.0, 0.0, 123456.789, INFINITY};
-    int n = sizeof(keys) / sizeof(keys[0]);
-    for (int i = 0; i < n; i++) {
-        long rep;
-        memcpy(&rep, &keys[i], sizeof(rep));
-        assert(bptree_put(tree, &keys[i], (bptree_value_t)(intptr_t)rep) == BPTREE_OK);
+void test_comparator_edge_cases_double(void) {
+    bptree *tree = create_test_tree_with_order(5);
+    double nan = NAN, inf = INFINITY, ninf = -INFINITY, negzero = -0.0, poszero = 0.0,
+           normal = 4.56;
+    ASSERT(bptree_put(tree, &inf, MAKE_VALUE_NUM(100)) == BPTREE_OK, "Insert inf failed");
+    ASSERT(bptree_put(tree, &ninf, MAKE_VALUE_NUM(200)) == BPTREE_OK, "Insert -inf failed");
+    ASSERT(bptree_put(tree, &normal, MAKE_VALUE_NUM(300)) == BPTREE_OK, "Insert normal failed");
+    ASSERT(bptree_put(tree, &negzero, MAKE_VALUE_NUM(400)) == BPTREE_OK, "Insert -0.0 failed");
+    ASSERT(bptree_put(tree, &poszero, MAKE_VALUE_NUM(500)) == BPTREE_OK, "Insert 0.0 failed");
+    ASSERT(bptree_get(tree, &inf) != NULL, "Get inf failed");
+    ASSERT(bptree_get(tree, &ninf) != NULL, "Get -inf failed");
+    ASSERT(bptree_get(tree, &normal) != NULL, "Get normal failed");
+    ASSERT(bptree_get(tree, &negzero) != NULL, "Get -0.0 failed");
+    ASSERT(bptree_get(tree, &poszero) != NULL, "Get 0.0 failed");
+    if (!is_nan_key(&nan)) {
     }
-    for (int i = 0; i < n; i++) {
-        long rep;
-        memcpy(&rep, &keys[i], sizeof(rep));
-        bptree_value_t res = bptree_get(tree, &keys[i]);
-        assert(res == (bptree_value_t)(intptr_t)rep);
-    }
-    double key = 999999.999;
-    assert(bptree_get(tree, &key) == 0);
     bptree_free(tree);
-    printf("Double key edge cases passed.\n");
 }
 #endif
 
+void test_precise_boundary_conditions(void) {
+    for (int m = 0; m < num_test_max_keys; m++) {
+        int order = test_max_keys_values[m];
+        bptree *tree = create_test_tree_with_order(order);
+        const int N = order * 3;
 #ifdef BPTREE_KEY_TYPE_STRING
-void test_string_edge_cases() {
-    printf("Test string key edge cases...\n");
-    bptree *tree = bptree_create(5, NULL, debug_enabled);
-    assert(tree != NULL);
-    bptree_key_t k1 = make_key("");
-    bptree_key_t k2 = make_key("a");
-    char longstr[256];
-    for (int i = 0; i < 255; i++) longstr[i] = 'z';
-    longstr[255] = '\0';
-    bptree_key_t k3 = make_key(longstr);
-    assert(bptree_put(tree, &k1, "") == BPTREE_OK);
-    assert(bptree_put(tree, &k2, "a") == BPTREE_OK);
-    assert(bptree_put(tree, &k3, longstr) == BPTREE_OK);
-    assert(strcmp(bptree_get(tree, &k1), "") == 0);
-    assert(strcmp(bptree_get(tree, &k2), "a") == 0);
-    assert(strcmp(bptree_get(tree, &k3), longstr) == 0);
-    // Duplicate insertion test:
-    assert(bptree_put(tree, &k2, "a") == BPTREE_DUPLICATE_KEY);
-    bptree_free(tree);
-    printf("String key edge cases passed.\n");
-}
+        char key_buf[32];
+        for (int i = 0; i < N; i++) {
+            sprintf(key_buf, "bound%03d", i);
+            bptree_key_t k = KEY(key_buf);
+            char *v = strdup(key_buf);
+            track_alloc(v);
+            ASSERT(bptree_put(tree, &k, v) == BPTREE_OK, "Insert failed at boundary condition");
+        }
+        bptree_key_t first = KEY("bound000");
+        bptree_key_t last;
+        sprintf(key_buf, "bound%03d", N - 1);
+        last = KEY(key_buf);
+        ASSERT(bptree_get(tree, &first) != NULL, "Get first key failed");
+        ASSERT(bptree_get(tree, &last) != NULL, "Get last key failed");
+#else
+        for (int i = 0; i < N; i++) {
+            int k = i + 1;
+            ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK,
+                   "Insert failed at boundary condition");
+        }
+        int first = 1;
+        int last = N;
+        ASSERT(bptree_get(tree, &first) != NULL, "Get first key failed");
+        ASSERT(bptree_get(tree, &last) != NULL, "Get last key failed");
 #endif
+        bptree_free(tree);
+#ifdef BPTREE_KEY_TYPE_STRING
+        cleanup_alloc_track();
+#endif
+    }
+}
 
-/* --- Main: Run All Tests --- */
+void test_stress(void) {
+    int N = 10000;
+    for (int m = 0; m < num_test_max_keys; m++) {
+        int order = test_max_keys_values[m];
+        bptree *tree = create_test_tree_with_order(order);
+#ifdef BPTREE_KEY_TYPE_STRING
+        char key_buf[32];
+        for (int i = 0; i < N; i++) {
+            sprintf(key_buf, "stress%05d", i);
+            bptree_key_t k = KEY(key_buf);
+            char *v = strdup(key_buf);
+            track_alloc(v);
+            ASSERT(bptree_put(tree, &k, v) == BPTREE_OK, "Stress insert failed");
+        }
+        for (int i = 0; i < N; i++) {
+            sprintf(key_buf, "stress%05d", i);
+            bptree_key_t k = KEY(key_buf);
+            const char *res = GET_VALUE_STR(bptree_get(tree, &k));
+            ASSERT(res != NULL, "Stress get failed");
+            ASSERT(strcmp(res, key_buf) == 0, "Stress value mismatch");
+        }
+#else
+        for (int i = 0; i < N; i++) {
+            int k = i + 1;
+            ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK, "Stress insert failed");
+        }
+        for (int i = 0; i < N; i++) {
+            int k = i + 1;
+            bptree_value_t res = bptree_get(tree, &k);
+            ASSERT(res != NULL, "Stress get failed");
+            ASSERT(CMP_VALUE_NUM(res, k), "Stress value mismatch");
+        }
+#endif
+        bptree_free(tree);
+#ifdef BPTREE_KEY_TYPE_STRING
+        cleanup_alloc_track();
+#endif
+    }
+}
+
 int main(void) {
-    test_insertion_and_search();
-    test_deletion();
-    test_empty_tree();
-    test_duplicate_insertion();
-    test_single_element();
-    test_upsert();
-    test_bulk_load_sorted();
-    test_bulk_load_empty();
-    test_range_query();
-    test_iterator();
-    test_tree_stats();
-    test_invariants();
-#ifdef BPTREE_KEY_TYPE_INT
-    test_int_edge_cases();
-#endif
+    fprintf(stderr, "Starting advanced B+ tree tests\n");
+    RUN_TEST(test_creation_failure);
+    RUN_TEST(test_insertion_and_search);
+    RUN_TEST(test_deletion);
+    RUN_TEST(test_empty_tree);
+    RUN_TEST(test_duplicate_insertion);
+    RUN_TEST(test_single_element);
+    RUN_TEST(test_upsert);
+    RUN_TEST(test_bulk_load_sorted);
+    RUN_TEST(test_bulk_load_failures);
+    RUN_TEST(test_bulk_load_empty);
+    RUN_TEST(test_range_query);
+    RUN_TEST(test_iterator);
+    RUN_TEST(test_tree_stats);
 #ifdef BPTREE_KEY_TYPE_FLOAT
-    test_float_edge_cases();
+    RUN_TEST(test_comparator_edge_cases_float);
 #endif
 #ifdef BPTREE_KEY_TYPE_DOUBLE
-    test_double_edge_cases();
+    RUN_TEST(test_comparator_edge_cases_double);
 #endif
-#ifdef BPTREE_KEY_TYPE_STRING
-    test_string_edge_cases();
-#endif
-    printf("All tests passed.\n");
-    return 0;
+    RUN_TEST(test_precise_boundary_conditions);
+    RUN_TEST(test_stress);
+    fprintf(stderr, "Tests run: %d, failures: %d\n", tests_run, tests_failed);
+    return tests_failed ? EXIT_FAILURE : EXIT_SUCCESS;
 }

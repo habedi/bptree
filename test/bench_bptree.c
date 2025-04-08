@@ -10,7 +10,6 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <time.h>
 
 #include "bptree.h"
@@ -18,26 +17,21 @@
 /* Global flag to enable or disable debug logging */
 const bool debug_enabled = false;
 
-/* Comparison function for integers.
- * bptree_key_t is an int.
- */
+/* Comparison function for integer keys. (bptree_key_t is an int.) */
 int compare_ints(const bptree_key_t *a, const bptree_key_t *b) {
-    int ia = *a;
-    int ib = *b;
+    const int ia = *a;
+    const int ib = *b;
     return (ia > ib) - (ia < ib);
 }
 
-/* Comparison function for qsort, comparing int pointers.
- */
+/* Comparison function for qsort, comparing int pointers. */
 int compare_ints_qsort(const void *a, const void *b) {
     const int *ia = *(const int **)a;
     const int *ib = *(const int **)b;
     return (*ia > *ib) - (*ia < *ib);
 }
 
-/* Benchmarking macro.
- * Executes the code block count times and prints the total and per-iteration time.
- */
+/* The macro executes the code block count times and prints the total and per-iteration time. */
 #define BENCH(label, count, code_block)                                                           \
     do {                                                                                          \
         clock_t start = clock();                                                                  \
@@ -89,7 +83,7 @@ int main(void) {
 
     /* --- Bulk Load Benchmark --- */
     // For bulk load, input must be sorted.
-    qsort(keys_array, N, sizeof(int), (int (*)(const void *, const void *))compare_ints);
+    qsort(keys_array, N, sizeof(int), compare_ints);
     // We assume values follow the same order.
     BENCH("Bulk Load (sorted)", 1, {
         bptree *tree = bptree_create(max_keys, compare_ints, debug_enabled);
@@ -102,7 +96,7 @@ int main(void) {
     });
 
     /* --- Insertion Benchmarks --- */
-    shuffle((void **)pointers, N);
+    shuffle(pointers, N);
     {
         bptree *tree = bptree_create(max_keys, compare_ints, debug_enabled);
         if (!tree) {
@@ -111,7 +105,7 @@ int main(void) {
         }
         BENCH("Insertion (rand)", N, {
             const bptree_status stat =
-                bptree_put(tree, (int *)pointers[bench_i], pointers[bench_i]);
+                bptree_put(tree, pointers[bench_i], pointers[bench_i]);
             assert(stat == BPTREE_OK);
         });
         bptree_free(tree);
@@ -125,14 +119,14 @@ int main(void) {
         }
         BENCH("Insertion (seq)", N, {
             const bptree_status stat =
-                bptree_put(tree, (int *)pointers[bench_i], pointers[bench_i]);
+                bptree_put(tree, pointers[bench_i], pointers[bench_i]);
             assert(stat == BPTREE_OK);
         });
         bptree_free(tree);
     }
 
     /* --- Upsert Benchmark --- */
-    shuffle((void **)pointers, N);
+    shuffle(pointers, N);
     {
         bptree *tree = bptree_create(max_keys, compare_ints, debug_enabled);
         if (!tree) {
@@ -141,20 +135,20 @@ int main(void) {
         }
         // Pre-load tree with N keys.
         for (int i = 0; i < N; i++) {
-            const bptree_status stat = bptree_put(tree, (int *)pointers[i], pointers[i]);
+            const bptree_status stat = bptree_put(tree, pointers[i], pointers[i]);
             assert(stat == BPTREE_OK);
         }
         // Now, update each key with a new value (could be the same pointer for this benchmark).
         BENCH("Upsert (seq)", N, {
             const bptree_status stat =
-                bptree_upsert(tree, (int *)pointers[bench_i], pointers[bench_i]);
+                bptree_upsert(tree, pointers[bench_i], pointers[bench_i]);
             assert(stat == BPTREE_OK);
         });
         bptree_free(tree);
     }
 
     /* --- Search Benchmarks --- */
-    shuffle((void **)pointers, N);
+    shuffle(pointers, N);
     {
         bptree *tree = bptree_create(max_keys, compare_ints, debug_enabled);
         if (!tree) {
@@ -162,11 +156,11 @@ int main(void) {
             exit(1);
         }
         for (int i = 0; i < N; i++) {
-            const bptree_status stat = bptree_put(tree, (int *)pointers[i], pointers[i]);
+            const bptree_status stat = bptree_put(tree, pointers[i], pointers[i]);
             assert(stat == BPTREE_OK);
         }
         BENCH("Search (rand)", N, {
-            void *res = bptree_get(tree, (int *)pointers[bench_i]);
+            void *res = bptree_get(tree, pointers[bench_i]);
             if (!res) {
                 printf("Search failed at index %d, pointer=%p, value=%d\n", bench_i,
                        pointers[bench_i], *(int *)pointers[bench_i]);
@@ -183,11 +177,11 @@ int main(void) {
             exit(1);
         }
         for (int i = 0; i < N; i++) {
-            const bptree_status stat = bptree_put(tree, (int *)pointers[i], pointers[i]);
+            const bptree_status stat = bptree_put(tree, pointers[i], pointers[i]);
             assert(stat == BPTREE_OK);
         }
         BENCH("Search (seq)", N, {
-            void *res = bptree_get(tree, (int *)pointers[bench_i]);
+            void *res = bptree_get(tree, pointers[bench_i]);
             if (!res) {
                 printf("Sequential search failed at index %d, pointer=%p, value=%d\n", bench_i,
                        pointers[bench_i], *(int *)pointers[bench_i]);
@@ -206,7 +200,7 @@ int main(void) {
             exit(1);
         }
         for (int i = 0; i < N; i++) {
-            const bptree_status stat = bptree_put(tree, (int *)pointers[i], pointers[i]);
+            const bptree_status stat = bptree_put(tree, pointers[i], pointers[i]);
             assert(stat == BPTREE_OK);
         }
         int iter_total = 0;
@@ -228,19 +222,19 @@ int main(void) {
 
     /* --- Deletion Benchmarks --- */
     {
-        shuffle((void **)pointers, N);
+        shuffle(pointers, N);
         bptree *tree = bptree_create(max_keys, compare_ints, debug_enabled);
         if (!tree) {
             fprintf(stderr, "Failed to create tree\n");
             exit(1);
         }
         for (int i = 0; i < N; i++) {
-            const bptree_status stat = bptree_put(tree, (int *)pointers[i], pointers[i]);
+            const bptree_status stat = bptree_put(tree, pointers[i], pointers[i]);
             assert(stat == BPTREE_OK);
         }
-        shuffle((void **)pointers, N);
+        shuffle(pointers, N);
         BENCH("Deletion (rand)", N, {
-            const bptree_status stat = bptree_remove(tree, (int *)pointers[bench_i]);
+            const bptree_status stat = bptree_remove(tree, pointers[bench_i]);
             if (stat != BPTREE_OK) {
                 printf("Random deletion failed at index %d, pointer=%p, value=%d\n", bench_i,
                        pointers[bench_i], *(int *)pointers[bench_i]);
@@ -257,11 +251,11 @@ int main(void) {
             exit(1);
         }
         for (int i = 0; i < N; i++) {
-            const bptree_status stat = bptree_put(tree, (int *)pointers[i], pointers[i]);
+            const bptree_status stat = bptree_put(tree, pointers[i], pointers[i]);
             assert(stat == BPTREE_OK);
         }
         BENCH("Deletion (seq)", N, {
-            const bptree_status stat = bptree_remove(tree, (int *)pointers[bench_i]);
+            const bptree_status stat = bptree_remove(tree, pointers[bench_i]);
             if (stat != BPTREE_OK) {
                 printf("Sequential deletion failed at index %d, pointer=%p, value=%d\n", bench_i,
                        pointers[bench_i], *(int *)pointers[bench_i]);
@@ -280,7 +274,7 @@ int main(void) {
             exit(1);
         }
         for (int i = 0; i < N; i++) {
-            const bptree_status stat = bptree_put(tree, (int *)pointers[i], pointers[i]);
+            const bptree_status stat = bptree_put(tree, pointers[i], pointers[i]);
             assert(stat == BPTREE_OK);
         }
         BENCH("Range Search (seq)", N, {
@@ -292,7 +286,7 @@ int main(void) {
             }
             int count = 0;
             void **res =
-                bptree_get_range(tree, (int *)pointers[idx], (int *)pointers[end_idx], &count);
+                bptree_get_range(tree, pointers[idx], pointers[end_idx], &count);
             assert(count >= 0);
             free(res);
         });

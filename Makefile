@@ -130,11 +130,6 @@ doc: ## Generate documentation using Doxygen
 	@test -f Doxyfile || { echo "Error: Doxyfile not found."; exit 1; }
 	doxygen Doxyfile
 
-.PHONY: figure
-figure: ## Generate figures using Graphviz
-	@echo "Generating figures..."
-	@$(SHELL) $(ASSET_DIR)/make_figures.sh $(ASSET_DIR)
-
 ##############################################################################################################
 ## Release and Debugging Targets
 ##############################################################################################################

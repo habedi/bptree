@@ -1,7 +1,7 @@
 <div align="center">
 
 <picture>
-    <img alt="B+ tree" src="assets/bptree_v4.svg" height="90%" width="90%">
+    <img alt="B+ tree" src="logo.svg" height="90%" width="90%">
 </picture>
 <br>
 

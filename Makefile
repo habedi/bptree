@@ -2,7 +2,7 @@
 SHELL := bash
 
 # Build configuration
-CC ?= gcc # or clang
+CC ?= clang # or gcc
 ENABLE_ASAN ?= 0
 BUILD_TYPE ?= debug
 

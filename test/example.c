@@ -1,47 +1,64 @@
 /**
  * @file example.c
- * @brief An improved example usage of the Bptree library.
+ * @brief Example usage of the Bptree library.
  *
- * This example demonstrates how to create a B+ tree, insert dynamically
- * allocated records, retrieve records, perform range queries, iterate
- * through the tree, remove records, upsert, check invariants, get stats,
- * and bulk load new records, ensuring proper memory management.
+ * This example demonstrates how to create a B+ tree using both bptree_create
+ * and bptree_create_config, insert dynamically allocated records, retrieve records,
+ * perform range queries, iterate over the tree, remove records, upsert records,
+ * check invariants, obtain tree statistics, and use convenience functions such as
+ * bptree_contains and bptree_size.
  */
 
-// Define BPTREE_IMPLEMENTATION in this file only to generate the code
+/* --- Preprocessor definitions --- */
+
+/* Define BPTREE_IMPLEMENTATION before including bptree.h */
 #define BPTREE_IMPLEMENTATION
-// Define the key type before including bptree.h (default is INT anyway)
+
+/* Configure the key type to use int64_t */
 #define BPTREE_KEY_TYPE_INT
-// Explicitly define the value type for clarity (though void* is default)
+#define BPTREE_INT_TYPE int64_t
+
+/* Configure the value type as a pointer to a record */
 #define BPTREE_VALUE_TYPE struct record *
-#include "bptree.h" // Include the header AFTER definitions
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h> // For strncpy
+#include <string.h>
 
-/* Global flag to enable or disable debug logging */
-const bool debug_enabled = false; // Set to true for verbose B+ tree logs
+#include "bptree.h"  // Must follow the above macro definitions
 
-/* Define a record structure for sample data. */
+/** Global flag for debug logging */
+const bool debug_enabled = false;
+
+/**
+ * @brief Structure representing a record.
+ */
 typedef struct record {
-    int id;         // Unique identifier; used as the key.
-    char name[32];  // Name of the user.
-} record_t; // Use typedef for cleaner syntax
+    bptree_key_t id; /**< Unique record ID */
+    char name[32];   /**< Record name */
+} record_t;
 
-/* Comparison function for keys (which are ints).
-   Note: The library passes const bptree_key_t*, which is const int* here.
-   The default comparator would work fine too, but this shows how to provide one. */
+/**
+ * @brief Comparison function for integer keys.
+ *
+ * @param a Pointer to the first key.
+ * @param b Pointer to the second key.
+ *
+ * @return -1 if *a < *b, 1 if *a > *b, 0 if equal.
+ */
 static int record_compare(const bptree_key_t *a, const bptree_key_t *b) {
-    // Since BPTREE_KEY_TYPE_INT, bptree_key_t is int.
-    // a and b are pointers to int.
     return (*a < *b) ? -1 : ((*a > *b) ? 1 : 0);
-    // Or using the simpler difference (if overflow is not a concern for the range of keys)
-    // return *a - *b;
 }
 
-/* Helper function to create and allocate a record */
-static record_t *create_record(int id, const char *name) {
+/**
+ * @brief Creates a record.
+ *
+ * @param id The record's key.
+ * @param name The record's name.
+ *
+ * @return Pointer to a new record or NULL on failure.
+ */
+static record_t *create_record(bptree_key_t id, const char *name) {
     record_t *rec = malloc(sizeof(record_t));
     if (!rec) {
         perror("Failed to allocate memory for record");
@@ -49,67 +66,94 @@ static record_t *create_record(int id, const char *name) {
     }
     rec->id = id;
     strncpy(rec->name, name, sizeof(rec->name) - 1);
-    rec->name[sizeof(rec->name) - 1] = '\0'; // Ensure null termination
+    rec->name[sizeof(rec->name) - 1] = '\0';
     return rec;
 }
 
-/* Helper function to print status codes */
+/**
+ * @brief Prints a key.
+ *
+ * @param key The key to print (assumed to be a long integer).
+ */
+static void print_key(bptree_key_t key) { printf("%ld", key); }
+
+/**
+ * @brief Converts a status code to a string.
+ *
+ * @param status A bptree_status value.
+ *
+ * @return A string representing the status.
+ */
 static const char *status_to_string(bptree_status status) {
     switch (status) {
-        case BPTREE_OK: return "OK";
-        case BPTREE_DUPLICATE_KEY: return "DUPLICATE_KEY";
-        case BPTREE_KEY_NOT_FOUND: return "KEY_NOT_FOUND";
-        case BPTREE_ALLOCATION_FAILURE: return "ALLOCATION_FAILURE";
-        case BPTREE_INVALID_ARGUMENT: return "INVALID_ARGUMENT";
-        case BPTREE_BULK_LOAD_NOT_SORTED: return "BULK_LOAD_NOT_SORTED";
-        case BPTREE_BULK_LOAD_DUPLICATE: return "BULK_LOAD_DUPLICATE";
-        case BPTREE_INTERNAL_ERROR: return "INTERNAL_ERROR";
-        default: return "UNKNOWN_STATUS";
+        case BPTREE_OK:
+            return "OK";
+        case BPTREE_DUPLICATE_KEY:
+            return "DUPLICATE_KEY";
+        case BPTREE_KEY_NOT_FOUND:
+            return "KEY_NOT_FOUND";
+        case BPTREE_ALLOCATION_FAILURE:
+            return "ALLOCATION_FAILURE";
+        case BPTREE_INVALID_ARGUMENT:
+            return "INVALID_ARGUMENT";
+        case BPTREE_BULK_LOAD_NOT_SORTED:
+            return "BULK_LOAD_NOT_SORTED";
+        case BPTREE_BULK_LOAD_DUPLICATE:
+            return "BULK_LOAD_DUPLICATE";
+        case BPTREE_INTERNAL_ERROR:
+            return "INTERNAL_ERROR";
+        default:
+            return "UNKNOWN_STATUS";
     }
 }
 
-/* Function to clean up: free all records stored in the tree */
+/**
+ * @brief Frees all records stored in the tree.
+ *
+ * Iterates over the tree and frees each record.
+ *
+ * @param tree The B+ tree.
+ */
 static void free_all_records(bptree *tree) {
     printf("\n--- Freeing Records ---\n");
     bptree_iterator *iter = bptree_iterator_new(tree);
     if (!iter) {
         fprintf(stderr, "Failed to create iterator for freeing records.\n");
-        // Potential memory leak if tree contains records, but we should proceed to free the tree structure
         return;
     }
-    record_t *item;
+    record_t *item = NULL;
     int count = 0;
-    // Note: BPTREE_VALUE_TYPE is record_t*, so iterator_next returns record_t*
-    while ((item = bptree_iterator_next(iter)) != NULL) {
-        // printf("Freeing record: id=%d, name=%s\n", item->id, item->name); // Optional: verbose freeing
+    while (bptree_iterator_next(iter, (bptree_value_t *)&item) == BPTREE_OK) {
         free(item);
         count++;
     }
     printf("Freed %d records.\n", count);
-    bptree_iterator_destroy(iter);
+    bptree_iterator_free(iter);
 }
 
-
+/**
+ * @brief Main function demonstrating the usage of the B+ tree API.
+ *
+ * This function creates a B+ tree, inserts records, tests duplicate insertion,
+ * retrieves a record, performs a range query, iterates over records,
+ * removes a record, upserts records, checks invariants, prints statistics,
+ * and finally frees all records and the tree.
+ *
+ * @return EXIT_SUCCESS if successful, EXIT_FAILURE otherwise.
+ */
 int main(void) {
-    printf("--- B+ Tree Example ---\n");
-
-    // --- Initialization ---
-    printf("\n--- Creating Tree ---\n");
-    // Create a new B+ tree instance with max_keys = 4.
-    // Explicitly pass the comparison function (or NULL to use default for INT).
+    /* Create a B+ tree with a maximum of 4 keys per node */
     bptree *tree = bptree_create(4, record_compare, debug_enabled);
     if (!tree) {
         fprintf(stderr, "Error: failed to create B+ tree\n");
         return EXIT_FAILURE;
     }
-    printf("B+ Tree created successfully (max_keys=%d).\n", tree->max_keys);
+    printf("B+ Tree created (max_keys=%d).\n", tree->max_keys);
 
-    // --- Basic Operations ---
-    printf("\n--- Inserting Records ---\n");
+    printf("Inserting records...\n");
     bptree_status status;
-    record_t *rec_ptrs[9]; // Keep track of pointers to free later if needed, though we iterate
+    record_t *rec_ptrs[9];
 
-    // Create records dynamically
     rec_ptrs[0] = create_record(1, "Alice");
     rec_ptrs[1] = create_record(2, "Bob");
     rec_ptrs[2] = create_record(3, "Charlie");
@@ -120,274 +164,264 @@ int main(void) {
     rec_ptrs[7] = create_record(4, "David");
     rec_ptrs[8] = create_record(5, "Eve");
 
-    // Check allocation results
     for (int i = 0; i < 9; ++i) {
         if (!rec_ptrs[i]) {
-            fprintf(stderr, "Failed to allocate memory for initial records. Cleaning up.\n");
-            // Free already allocated records before freeing the tree
-            for(int j = 0; j < i; ++j) free(rec_ptrs[j]);
+            fprintf(stderr, "Allocation failure for records. Cleaning up.\n");
+            for (int j = 0; j < i; ++j) free(rec_ptrs[j]);
             bptree_free(tree);
             return EXIT_FAILURE;
         }
     }
 
-    // Insert records into the tree. Key is record's id, value is pointer.
     for (int i = 0; i < 9; ++i) {
-        status = bptree_put(tree, &rec_ptrs[i]->id, rec_ptrs[i]);
-        printf("Inserting id=%d: Status = %s\n", rec_ptrs[i]->id, status_to_string(status));
-        if (status != BPTREE_OK && status != BPTREE_DUPLICATE_KEY /* Should not happen here */) {
-            fprintf(stderr, "Error inserting record id=%d. Aborting.\n", rec_ptrs[i]->id);
-            free_all_records(tree); // Free records inserted so far
+        status = bptree_insert(tree, &rec_ptrs[i]->id, rec_ptrs[i]);
+        printf("Inserting id=");
+        print_key(rec_ptrs[i]->id);
+        printf(": Status = %s\n", status_to_string(status));
+        if (status != BPTREE_OK && status != BPTREE_DUPLICATE_KEY) {
+            fprintf(stderr, "Error inserting record. Aborting.\n");
+            free_all_records(tree);
             bptree_free(tree);
-            // Also free any remaining rec_ptrs that weren't inserted
-            for(int j = i; j < 9; ++j) free(rec_ptrs[j]);
+            for (int j = i; j < 9; ++j) free(rec_ptrs[j]);
             return EXIT_FAILURE;
         }
     }
 
-
-    /* Attempt to insert a duplicate record. */
-    printf("\n--- Testing Duplicate Insert ---\n");
-    record_t *dup_rec = create_record(3, "Charlie Duplicate"); // Need a new record instance
-    if (!dup_rec) return EXIT_FAILURE; // Handle allocation failure
-    status = bptree_put(tree, &dup_rec->id, dup_rec);
+    /* Test duplicate insertion */
+    printf("Testing duplicate insert...\n");
+    record_t *dup_rec = create_record(3, "Charlie Duplicate");
+    if (!dup_rec) return EXIT_FAILURE;
+    status = bptree_insert(tree, &dup_rec->id, dup_rec);
     if (status == BPTREE_DUPLICATE_KEY) {
-        printf("Duplicate insert for id=%d correctly rejected (Status: %s).\n", dup_rec->id, status_to_string(status));
-        free(dup_rec); // Free the duplicate record not inserted
+        printf("Duplicate insert for id=");
+        print_key(dup_rec->id);
+        printf(" rejected (Status: %s).\n", status_to_string(status));
+        free(dup_rec);
     } else {
-         fprintf(stderr, "Error: Duplicate key was not rejected or another error occurred (Status: %s).\n", status_to_string(status));
-         // If it somehow got inserted (shouldn't happen), it would need freeing later.
-         // If another error, clean up everything.
-         free(dup_rec); // Free the record anyway
-         free_all_records(tree);
-         bptree_free(tree);
-         return EXIT_FAILURE;
-    }
-
-
-    /* Retrieve a record by key. */
-    printf("\n--- Retrieving Record ---\n");
-    const int search_key = 3;
-    // Note: bptree_get returns BPTREE_VALUE_TYPE, which is record_t*
-    record_t *found = bptree_get(tree, &search_key);
-    if (found) {
-        printf("Found record: id=%d, name=%s\n", found->id, found->name);
-    } else {
-        printf("Record with id=%d not found.\n", search_key);
-    }
-
-    /* Perform a range query for records with id between 4 and 7 (inclusive). */
-    printf("\n--- Range Query ---\n");
-    const int low = 4;
-    const int high = 7;
-    int range_count = 0;
-    // bptree_get_range returns an array of BPTREE_VALUE_TYPE (record_t*)
-    // Cast the result to record_t**
-    record_t **range_results = (record_t **)bptree_get_range(tree, &low, &high, &range_count);
-
-    if (range_results) {
-        printf("Range query results (id in [%d, %d]), count = %d:\n", low, high, range_count);
-        for (int i = 0; i < range_count; i++) {
-            record_t *r = range_results[i]; // Direct access, no cast needed inside loop
-            if (r) { // Good practice to check pointer, though library should return valid ones
-                 printf("  id=%d, name=%s\n", r->id, r->name);
-            }
-        }
-        // IMPORTANT: The caller must free the array returned by bptree_get_range,
-        // but NOT the records *within* the array (they are still owned by the tree).
-        free(range_results);
-    } else {
-         printf("No records found in range [%d, %d] or error occurred.\n", low, high);
-    }
-
-    /* Iterate through all records using an iterator. */
-    printf("\n--- Iterating All Records ---\n");
-    bptree_iterator *iter = bptree_iterator_new(tree);
-    if (!iter) {
-         fprintf(stderr, "Failed to create iterator.\n");
-    } else {
-        record_t *item;
-        while ((item = bptree_iterator_next(iter)) != NULL) {
-            printf("  id=%d, name=%s\n", item->id, item->name);
-        }
-        bptree_iterator_destroy(iter);
-    }
-
-
-    /* Remove a record. */
-    printf("\n--- Removing Record ---\n");
-    const int remove_key = 2;
-    // First, get the pointer to free it *after* successful removal
-    record_t *record_to_remove = bptree_get(tree, &remove_key);
-    if (record_to_remove) {
-        status = bptree_remove(tree, &remove_key);
-        printf("Attempting to remove id=%d: Status = %s\n", remove_key, status_to_string(status));
-        if (status == BPTREE_OK) {
-            printf("Record with id=%d removed successfully from tree.\n", remove_key);
-            free(record_to_remove); // Now free the memory for the removed record
-        } else {
-            fprintf(stderr, "Failed to remove record with id=%d from tree structure.\n", remove_key);
-            // Do NOT free record_to_remove as it's presumably still in the tree
-        }
-    } else {
-         printf("Record with id=%d not found, cannot remove.\n", remove_key);
-    }
-
-
-    /* Try to retrieve the removed record. */
-    printf("\n--- Retrieving Removed Record ---\n");
-    found = bptree_get(tree, &remove_key);
-    if (found) {
-        // This should not happen if removal was successful
-        printf("Error: Found removed record: id=%d, name=%s\n", found->id, found->name);
-    } else {
-        printf("Record with id=%d not found (as expected after removal).\n", remove_key);
-    }
-
-    /* Upsert: Update an existing record */
-    printf("\n--- Upserting (Update) ---\n");
-    const int upsert_key_update = 3;
-    record_t *old_record_to_replace = bptree_get(tree, &upsert_key_update); // Get pointer to old record
-    record_t *updated_rec = create_record(upsert_key_update, "Charlie Updated");
-    if (!updated_rec) { /* handle alloc error */ return EXIT_FAILURE; }
-
-    status = bptree_upsert(tree, &updated_rec->id, updated_rec);
-    printf("Upserting id=%d: Status = %s\n", updated_rec->id, status_to_string(status));
-
-    if (status == BPTREE_OK) {
-         printf("Upsert successful for id=%d.\n", updated_rec->id);
-         if (old_record_to_replace && old_record_to_replace != updated_rec) {
-             // If upsert replaced an existing item, free the old one.
-             printf("Freeing old record for id=%d.\n", old_record_to_replace->id);
-             free(old_record_to_replace);
-         }
-    } else {
-        fprintf(stderr, "Upsert failed for id=%d with status %s\n", updated_rec->id, status_to_string(status));
-        free(updated_rec); // Free the newly allocated record if upsert failed
-    }
-
-
-    /* Upsert: Insert a new record */
-    printf("\n--- Upserting (Insert) ---\n");
-    record_t *new_rec = create_record(10, "Judy");
-    if (!new_rec) { /* handle alloc error */ return EXIT_FAILURE; }
-    status = bptree_upsert(tree, &new_rec->id, new_rec);
-    printf("Upserting id=%d: Status = %s\n", new_rec->id, status_to_string(status));
-     if (status != BPTREE_OK) {
-        fprintf(stderr, "Upsert failed for id=%d with status %s\n", new_rec->id, status_to_string(status));
-        free(new_rec); // Free the newly allocated record if upsert failed
-    }
-
-
-    /* Retrieve the upserted records */
-    printf("\n--- Retrieving Upserted Records ---\n");
-    found = bptree_get(tree, &upsert_key_update); // Key 3
-    if (found) printf("Found upserted record: id=%d, name=%s\n", found->id, found->name);
-    else printf("Upserted record with id=%d not found.\n", upsert_key_update);
-
-    found = bptree_get(tree, &new_rec->id); // Key 10
-    if (found) printf("Found upserted record: id=%d, name=%s\n", found->id, found->name);
-    else printf("Upserted record with id=%d not found.\n", new_rec->id);
-
-    /* Check invariants of the tree. */
-    printf("\n--- Checking Invariants ---\n");
-    if (bptree_check_invariants(tree)) {
-        printf("Tree invariants check passed.\n");
-    } else {
-        fprintf(stderr, "Error: Tree invariants check failed!\n");
-        // Consider aborting or detailed logging if this happens
-    }
-
-    /* Get and print tree statistics. */
-    printf("\n--- Getting Statistics ---\n");
-    bptree_stats stats = bptree_get_stats(tree);
-    printf("Tree stats: count=%d, height=%d, node_count=%d\n", stats.count, stats.height, stats.node_count);
-
-    // --- Bulk Load ---
-    // Note: Bulk load REPLACES the current tree contents.
-    // We must free the records currently in the tree *before* bulk loading.
-    printf("\n--- Preparing for Bulk Load ---\n");
-    free_all_records(tree); // Free existing records before replacing the tree
-
-    printf("\n--- Performing Bulk Load ---\n");
-    // Create data dynamically for bulk load
-    const int bulk_count = 6;
-    record_t *bulk_records[bulk_count]; // Array of pointers
-    int bulk_keys[bulk_count];
-    bptree_value_t bulk_values[bulk_count]; // Array of record_t* (which matches BPTREE_VALUE_TYPE)
-
-    bool bulk_alloc_ok = true;
-    for (int i = 0; i < bulk_count; ++i) {
-        int id = 20 + i;
-        char name_buf[10];
-        snprintf(name_buf, sizeof(name_buf), "Bulk %c", 'A' + i);
-        bulk_records[i] = create_record(id, name_buf);
-        if (!bulk_records[i]) {
-            fprintf(stderr, "Failed to allocate record %d for bulk load.\n", i);
-            // Free already allocated bulk records
-            for(int j = 0; j < i; ++j) free(bulk_records[j]);
-            bulk_alloc_ok = false;
-            break;
-        }
-        bulk_keys[i] = bulk_records[i]->id;
-        bulk_values[i] = bulk_records[i]; // Assign the pointer
-    }
-
-    if (bulk_alloc_ok) {
-        // Ensure data is sorted for bulk load
-        // (It is sorted by design here, but a real application might need qsort)
-        status = bptree_bulk_load(tree, bulk_keys, bulk_values, bulk_count);
-        printf("Bulk load status: %s\n", status_to_string(status));
-
-        if (status != BPTREE_OK) {
-            fprintf(stderr, "Bulk load failed. Cleaning up allocated bulk records.\n");
-            // If bulk load failed, the tree state is undefined/empty, but we still own the allocated records
-            for (int i = 0; i < bulk_count; ++i) free(bulk_records[i]);
-            bptree_free(tree);
-            return EXIT_FAILURE;
-        }
-
-         /* Iterate through all records again after the bulk load. */
-        printf("\n--- Iterating After Bulk Load ---\n");
-        iter = bptree_iterator_new(tree);
-        if (iter) {
-            record_t *item;
-            while ((item = bptree_iterator_next(iter)) != NULL) {
-                printf("  id=%d, name=%s\n", item->id, item->name);
-            }
-            bptree_iterator_destroy(iter);
-        }
-
-        /* Assert that the tree is still valid after the bulk load. */
-        printf("\n--- Asserting Invariants After Bulk Load ---\n");
-        // bptree_assert_invariants(tree); // Use assert only if you want program termination on failure
-        if (bptree_check_invariants(tree)) {
-            printf("Tree invariants check passed after bulk load.\n");
-        } else {
-             fprintf(stderr, "Error: Tree invariants check failed after bulk load!\n");
-        }
-
-
-        /* Get and print tree statistics after the bulk load. */
-        printf("\n--- Statistics After Bulk Load ---\n");
-        stats = bptree_get_stats(tree);
-        printf("Tree stats: count=%d, height=%d, node_count=%d\n", stats.count, stats.height, stats.node_count);
-
-    } else {
-        // Bulk allocation failed earlier
-        bptree_free(tree); // Free the empty tree structure
+        fprintf(stderr, "Error: duplicate key was not rejected.\n");
+        free(dup_rec);
+        free_all_records(tree);
+        bptree_free(tree);
         return EXIT_FAILURE;
     }
 
-    // --- Cleanup ---
-    printf("\n--- Final Cleanup ---\n");
-    // Free all records currently in the tree (from the bulk load)
-    free_all_records(tree);
+    /* Retrieve a record */
+    printf("Retrieving record with key 3...\n");
+    const bptree_key_t search_key = 3;
+    record_t *found = NULL;
+    status = bptree_get_value(tree, &search_key, (bptree_value_t *)&found);
+    if (status == BPTREE_OK && found) {
+        printf("Found record: id=");
+        print_key(found->id);
+        printf(", name=%s\n", found->name);
+    } else {
+        printf("Record with key ");
+        print_key(search_key);
+        printf(" not found.\n");
+    }
 
-    // Free the tree structure itself
+    /* Perform a range query */
+    printf("Performing range query for keys in [4, 7]...\n");
+    const bptree_key_t low = 4, high = 7;
+    int range_count = 0;
+    record_t **range_results = NULL;
+    status = bptree_get_range(tree, &low, &high, (bptree_value_t **)&range_results, &range_count);
+    if (status == BPTREE_OK && range_results) {
+        printf("Range query: count = %d\n", range_count);
+        for (int i = 0; i < range_count; i++) {
+            record_t *r = range_results[i];
+            if (r) {
+                printf("  id=");
+                print_key(r->id);
+                printf(", name=%s\n", r->name);
+            }
+        }
+        free(range_results);
+    } else {
+        printf("No records found in range [");
+        print_key(low);
+        printf(", ");
+        print_key(high);
+        printf("].\n");
+    }
+
+    /* Iterate over all records */
+    printf("Iterating over records...\n");
+    bptree_iterator *iter = bptree_iterator_new(tree);
+    if (iter) {
+        record_t *item = NULL;
+        while (bptree_iterator_next(iter, (bptree_value_t *)&item) == BPTREE_OK) {
+            printf("  id=");
+            print_key(item->id);
+            printf(", name=%s\n", item->name);
+        }
+        bptree_iterator_free(iter);
+    } else {
+        printf("Iterator creation failed.\n");
+    }
+
+    /* Remove a record */
+    printf("Removing record with key 2...\n");
+    const bptree_key_t remove_key = 2;
+    record_t *record_to_remove = NULL;
+    status = bptree_get_value(tree, &remove_key, (bptree_value_t *)&record_to_remove);
+    if (status == BPTREE_OK && record_to_remove) {
+        status = bptree_remove(tree, &remove_key);
+        printf("Removing id=");
+        print_key(remove_key);
+        printf(": Status = %s\n", status_to_string(status));
+        if (status == BPTREE_OK) {
+            printf("Record removed successfully.\n");
+            free(record_to_remove);
+        } else {
+            fprintf(stderr, "Failed to remove record.\n");
+        }
+    } else {
+        printf("Record with key ");
+        print_key(remove_key);
+        printf(" not found, cannot remove.\n");
+    }
+
+    /* Attempt to retrieve the removed record */
+    printf("Retrieving removed record with key 2...\n");
+    found = NULL;
+    status = bptree_get_value(tree, &remove_key, (bptree_value_t *)&found);
+    if (status == BPTREE_OK && found) {
+        printf("Error: Removed record still found: id=");
+        print_key(found->id);
+        printf(", name=%s\n", found->name);
+    } else {
+        printf("Record with key ");
+        print_key(remove_key);
+        printf(" not found (as expected).\n");
+    }
+
+    /* Upsert: update an existing record */
+    printf("Performing upsert (update) for key 3...\n");
+    const bptree_key_t upsert_key = 3;
+    record_t *old_record = NULL;
+    status = bptree_get_value(tree, &upsert_key, (bptree_value_t *)&old_record);
+    record_t *updated_rec = create_record(upsert_key, "Charlie Updated");
+    if (!updated_rec) return EXIT_FAILURE;
+    status = bptree_upsert(tree, &updated_rec->id, updated_rec);
+    printf("Upserting id=");
+    print_key(updated_rec->id);
+    printf(": Status = %s\n", status_to_string(status));
+    if (status == BPTREE_OK) {
+        printf("Upsert successful.\n");
+        if (old_record && old_record != updated_rec) {
+            printf("Freeing old record (id=");
+            print_key(old_record->id);
+            printf(").\n");
+            free(old_record);
+        }
+    } else {
+        fprintf(stderr, "Upsert failed.\n");
+        free(updated_rec);
+    }
+
+    /* Upsert: insert a new record */
+    printf("Performing upsert (insert) for key 10...\n");
+    record_t *new_rec = create_record(10, "Judy");
+    if (!new_rec) return EXIT_FAILURE;
+    status = bptree_upsert(tree, &new_rec->id, new_rec);
+    printf("Upserting id=");
+    print_key(new_rec->id);
+    printf(": Status = %s\n", status_to_string(status));
+    if (status != BPTREE_OK) {
+        fprintf(stderr, "Upsert insert failed.\n");
+        free(new_rec);
+    }
+
+    /* Retrieve upserted records */
+    printf("Retrieving upserted records...\n");
+    found = NULL;
+    status = bptree_get_value(tree, &upsert_key, (bptree_value_t *)&found);
+    if (status == BPTREE_OK && found) {
+        printf("Found record: id=");
+        print_key(found->id);
+        printf(", name=%s\n", found->name);
+    } else {
+        printf("Record with key ");
+        print_key(upsert_key);
+        printf(" not found.\n");
+    }
+    found = NULL;
+    status = bptree_get_value(tree, &new_rec->id, (bptree_value_t *)&found);
+    if (status == BPTREE_OK && found) {
+        printf("Found record: id=");
+        print_key(found->id);
+        printf(", name=%s\n", found->name);
+    } else {
+        printf("Record with key ");
+        print_key(new_rec->id);
+        printf(" not found.\n");
+    }
+
+    /* Check invariants and show statistics */
+    printf("Checking tree invariants...\n");
+    if (bptree_check_invariants(tree))
+        printf("Tree invariants OK.\n");
+    else
+        fprintf(stderr, "Tree invariants violated!\n");
+
+    bptree_stats stats = bptree_get_stats(tree);
+    printf("Tree stats: count=%d, height=%d, node_count=%d\n", stats.count, stats.height,
+           stats.node_count);
+
+    /* Demonstrate API usage examples inline */
+    printf("\n--- B+ Tree API Examples ---\n");
+
+    /* Check if the tree contains a key */
+    if (bptree_contains(tree, &upsert_key))
+        printf("Tree contains key ");
+    else
+        printf("Tree does not contain key ");
+    print_key(upsert_key);
+    printf(".\n");
+
+    /* Print tree size */
+    printf("Tree size: %d records.\n", bptree_size(tree));
+
+    /* Create a tree via configuration */
+    bptree_config cfg;
+    cfg.max_keys = 4;
+    cfg.compare = record_compare;
+    cfg.enable_debug = true;
+    cfg.alloc = NULL;
+    cfg.free = NULL;
+    cfg.realloc = NULL;
+    cfg.allocator_ctx = NULL;
+    bptree *tree2 = bptree_create_config(&cfg);
+    if (tree2) {
+        printf("Created tree with bptree_create_config (max_keys=%d).\n", cfg.max_keys);
+        bptree_free(tree2);
+    } else {
+        printf("Failed to create tree via bptree_create_config.\n");
+    }
+
+    /* Iterate over the tree */
+    iter = bptree_iterator_new(tree);
+    if (iter) {
+        printf("Iterating over records:\n");
+        while (bptree_iterator_has_next(iter)) {
+            record_t *item = NULL;
+            if (bptree_iterator_next(iter, (bptree_value_t *)&item) == BPTREE_OK) {
+                printf("  Record: id=");
+                print_key(item->id);
+                printf(", name=%s\n", item->name);
+            }
+        }
+        bptree_iterator_free(iter);
+    } else {
+        printf("Failed to create iterator for API examples.\n");
+    }
+
+    /* Free all records and the tree */
+    printf("Freeing all records and the tree...\n");
+    free_all_records(tree);
     bptree_free(tree);
     printf("B+ Tree freed.\n");
 
-    printf("\n--- Example Finished Successfully ---\n");
     return EXIT_SUCCESS;
 }

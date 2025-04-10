@@ -2,8 +2,8 @@
  * @file bench_bptree.c
  * @brief Benchmarks and performance tests for the Bptree library.
  *
- * This file benchmarks bulk loading, insertion, upsert, search, iteration,
- * deletion, and range search operations using both random and sequential input data.
+ * This file benchmarks insertion, search, iteration, deletion, and range search operations
+ * using both random and sequential input data.
  */
 
 #define BPTREE_IMPLEMENTATION
@@ -43,19 +43,6 @@ int compare_keys_qsort(const void *a, const void *b) {
     const bptree_key_t *ka = (const bptree_key_t *)a;
     const bptree_key_t *kb = (const bptree_key_t *)b;
     return (*ka < *kb) ? -1 : ((*ka > *kb) ? 1 : 0);
-}
-
-/**
- * @brief Comparison function for integer pointers used by qsort.
- *
- * @param a Pointer to the first integer pointer.
- * @param b Pointer to the second integer pointer.
- * @return -1 if **a < **b, 1 if **a > **b, 0 otherwise.
- */
-int compare_ints_qsort(const void *a, const void *b) {
-    const int *ia = *(const int **)a;
-    const int *ib = *(const int **)b;
-    return (*ia < *ib) ? -1 : ((*ia > *ib) ? 1 : 0);
 }
 
 /**
@@ -116,8 +103,7 @@ void shuffle_pair(bptree_key_t *keys, void **pointers, const int n) {
 /**
  * @brief Main function to run the benchmarks.
  *
- * Benchmarks bulk loading, insertion (random and sequential), upsert, search (random
- * and sequential), iteration, deletion (random and sequential), and range search on a B+ tree.
+ * Benchmarks insertion, search, iteration, deletion, and range search on a B+ tree.
  *
  * The benchmark parameters (seed, maximum keys per node, and number of items) are configurable
  * via the SEED, MAX_ITEMS, and N environment variables.
@@ -150,20 +136,7 @@ int main(void) {
         pointers[i] = &vals[i];
     }
 
-    /* --- Bulk Load Benchmark --- */
-    /* First, sort the keys */
-    qsort(keys_array, N, sizeof(bptree_key_t), compare_keys_qsort);
-    BENCH("Bulk Load (sorted)", 1, {
-        bptree *tree = bptree_create(max_keys, compare_keys, debug_enabled);
-        bptree_status st = bptree_bulk_load(tree, keys_array, pointers, N);
-        if (st != BPTREE_OK) {
-            fprintf(stderr, "Bulk load failed\n");
-            exit(1);
-        }
-        bptree_free(tree);
-    });
-
-    /* Prepare copies and shuffle for random order benchmarks */
+    /* --- Insertion Benchmark: Random Order --- */
     bptree_key_t *keys_copy = malloc(N * sizeof(bptree_key_t));
     void **pointers_copy = malloc(N * sizeof(void *));
     if (!keys_copy || !pointers_copy) {
@@ -174,7 +147,6 @@ int main(void) {
     memcpy(pointers_copy, pointers, N * sizeof(void *));
     shuffle_pair(keys_copy, pointers_copy, N);
 
-    /* --- Insertion Benchmark: Random Order --- */
     {
         bptree *tree = bptree_create(max_keys, compare_keys, debug_enabled);
         if (!tree) {
@@ -183,7 +155,7 @@ int main(void) {
         }
         BENCH("Insertion (rand)", N, {
             const bptree_status stat =
-                bptree_insert(tree, &keys_copy[bench_i], pointers_copy[bench_i]);
+                bptree_put(tree, &keys_copy[bench_i], pointers_copy[bench_i]);
             assert(stat == BPTREE_OK);
         });
         bptree_free(tree);
@@ -199,27 +171,7 @@ int main(void) {
         }
         BENCH("Insertion (seq)", N, {
             const bptree_status stat =
-                bptree_insert(tree, &keys_copy[bench_i], pointers_copy[bench_i]);
-            assert(stat == BPTREE_OK);
-        });
-        bptree_free(tree);
-    }
-
-    /* --- Upsert Benchmark --- */
-    memcpy(keys_copy, keys_array, N * sizeof(bptree_key_t));
-    memcpy(pointers_copy, pointers, N * sizeof(void *));
-    {
-        bptree *tree = bptree_create(max_keys, compare_keys, debug_enabled);
-        if (!tree) {
-            exit(1);
-        }
-        for (int i = 0; i < N; i++) {
-            const bptree_status stat = bptree_insert(tree, &keys_copy[i], pointers_copy[i]);
-            assert(stat == BPTREE_OK);
-        }
-        BENCH("Upsert (seq)", N, {
-            const bptree_status stat =
-                bptree_upsert(tree, &keys_copy[bench_i], pointers_copy[bench_i]);
+                bptree_put(tree, &keys_copy[bench_i], pointers_copy[bench_i]);
             assert(stat == BPTREE_OK);
         });
         bptree_free(tree);
@@ -231,58 +183,56 @@ int main(void) {
     qsort(keys_copy, N, sizeof(bptree_key_t), compare_keys_qsort);
     {
         bptree *tree = bptree_create(max_keys, compare_keys, debug_enabled);
-        if (!tree) {
-            exit(1);
-        }
+        if (!tree) exit(1);
         for (int i = 0; i < N; i++) {
-            const bptree_status stat = bptree_insert(tree, &keys_copy[i], pointers_copy[i]);
+            const bptree_status stat = bptree_put(tree, &keys_copy[i], pointers_copy[i]);
             assert(stat == BPTREE_OK);
         }
         BENCH("Search (rand)", N, {
             bptree_value_t res;
-            const bptree_status st = bptree_get_value(tree, &keys_copy[bench_i], &res);
+            const bptree_status st = bptree_get(tree, &keys_copy[bench_i], &res);
             assert(st == BPTREE_OK);
         });
         bptree_free(tree);
     }
     {
         bptree *tree = bptree_create(max_keys, compare_keys, debug_enabled);
-        if (!tree) {
-            exit(1);
-        }
+        if (!tree) exit(1);
         for (int i = 0; i < N; i++) {
-            const bptree_status stat = bptree_insert(tree, &keys_copy[i], pointers_copy[i]);
+            const bptree_status stat = bptree_put(tree, &keys_copy[i], pointers_copy[i]);
             assert(stat == BPTREE_OK);
         }
         BENCH("Search (seq)", N, {
             bptree_value_t res;
-            const bptree_status st = bptree_get_value(tree, &keys_copy[bench_i], &res);
+            const bptree_status st = bptree_get(tree, &keys_copy[bench_i], &res);
             assert(st == BPTREE_OK);
         });
         bptree_free(tree);
     }
 
     /* --- Iterator Benchmark --- */
-    qsort(keys_copy, N, sizeof(bptree_key_t), compare_keys_qsort);
     {
         bptree *tree = bptree_create(max_keys, compare_keys, debug_enabled);
-        if (!tree) {
-            exit(1);
-        }
+        if (!tree) exit(1);
+        /* Insert all keys in sequential (sorted) order for predictable iteration */
         for (int i = 0; i < N; i++) {
-            const bptree_status stat = bptree_insert(tree, &keys_copy[i], pointers_copy[i]);
+            const bptree_status stat = bptree_put(tree, &keys_copy[i], pointers_copy[i]);
             assert(stat == BPTREE_OK);
         }
         int iter_total = 0;
         int iterations = 1000;
         printf("Running iterator benchmark with %d iterations...\n", iterations);
         BENCH("Iterator", iterations, {
-            bptree_iterator *iter = bptree_iterator_new(tree);
+            /* Traverse the leaf linked list */
+            bptree_node *leaf = tree->root;
+            while (!leaf->is_leaf) {
+                leaf = bptree_node_children(leaf, tree->max_keys)[0];
+            }
             int count = 0;
-            bptree_value_t temp;
-            while (bptree_iterator_next(iter, &temp) == BPTREE_OK) count++;
+            for (bptree_node *cur = leaf; cur != NULL; cur = cur->next) {
+                count += cur->num_keys;
+            }
             iter_total += count;
-            bptree_iterator_free(iter);
         });
         printf("Total iterated elements over %d iterations: %d (expected %d per iteration)\n",
                iterations, iter_total, tree->count);
@@ -290,35 +240,53 @@ int main(void) {
     }
 
     /* --- Deletion Benchmarks --- */
+    /* 1) Random Order Deletion using a fixed deletion_order permutation */
     memcpy(keys_copy, keys_array, N * sizeof(bptree_key_t));
     memcpy(pointers_copy, pointers, N * sizeof(void *));
-    shuffle_pair(keys_copy, pointers_copy, N);
+    qsort(keys_copy, N, sizeof(bptree_key_t), compare_keys_qsort);
+
+    int *deletion_order = malloc(N * sizeof(int));
+    if (!deletion_order) {
+        fprintf(stderr, "Allocation failed for deletion_order\n");
+        exit(1);
+    }
+    for (int i = 0; i < N; i++) {
+        deletion_order[i] = i;
+    }
+    /* Shuffle the deletion_order array */
+    for (int i = N - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+        int tmp = deletion_order[i];
+        deletion_order[i] = deletion_order[j];
+        deletion_order[j] = tmp;
+    }
+
     {
         bptree *tree = bptree_create(max_keys, compare_keys, debug_enabled);
-        if (!tree) {
-            exit(1);
-        }
+        if (!tree) exit(1);
         for (int i = 0; i < N; i++) {
-            const bptree_status stat = bptree_insert(tree, &keys_copy[i], pointers_copy[i]);
+            const bptree_status stat = bptree_put(tree, &keys_copy[i], pointers_copy[i]);
             assert(stat == BPTREE_OK);
         }
-        shuffle_pair(keys_copy, pointers_copy, N);
         BENCH("Deletion (rand)", N, {
-            const bptree_status stat = bptree_remove(tree, &keys_copy[bench_i]);
+            int idx = deletion_order[bench_i];
+            const bptree_status stat = bptree_remove(tree, &keys_copy[idx]);
+            /* The deletion_order permutation guarantees that each key is removed exactly once. */
             assert(stat == BPTREE_OK);
         });
         bptree_free(tree);
     }
+    free(deletion_order);
+
+    /* 2) Sequential (Sorted) Deletion */
     memcpy(keys_copy, keys_array, N * sizeof(bptree_key_t));
     memcpy(pointers_copy, pointers, N * sizeof(void *));
     qsort(keys_copy, N, sizeof(bptree_key_t), compare_keys_qsort);
     {
         bptree *tree = bptree_create(max_keys, compare_keys, debug_enabled);
-        if (!tree) {
-            exit(1);
-        }
+        if (!tree) exit(1);
         for (int i = 0; i < N; i++) {
-            const bptree_status stat = bptree_insert(tree, &keys_copy[i], pointers_copy[i]);
+            const bptree_status stat = bptree_put(tree, &keys_copy[i], pointers_copy[i]);
             assert(stat == BPTREE_OK);
         }
         BENCH("Deletion (seq)", N, {
@@ -334,11 +302,9 @@ int main(void) {
     qsort(keys_copy, N, sizeof(bptree_key_t), compare_keys_qsort);
     {
         bptree *tree = bptree_create(max_keys, compare_keys, debug_enabled);
-        if (!tree) {
-            exit(1);
-        }
+        if (!tree) exit(1);
         for (int i = 0; i < N; i++) {
-            const bptree_status stat = bptree_insert(tree, &keys_copy[i], pointers_copy[i]);
+            const bptree_status stat = bptree_put(tree, &keys_copy[i], pointers_copy[i]);
             assert(stat == BPTREE_OK);
         }
         BENCH("Range Search (seq)", N, {

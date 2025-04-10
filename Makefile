@@ -165,6 +165,15 @@ ubsan: clean $(TEST_BINARY) $(BENCH_BINARY) $(EXAMPLE_BINARY) ## Run `undefined 
 	UBSAN_OPTIONS=print_stacktrace=1 ./$(TEST_BINARY)
 	UBSAN_OPTIONS=print_stacktrace=1 ./$(BENCH_BINARY)
 
+.PHONY: asan
+asan: CFLAGS += -fsanitize=address
+asan: LDFLAGS += -fsanitize=address
+asan: clean $(TEST_BINARY) $(BENCH_BINARY) $(EXAMPLE_BINARY) ## Run `address sanitizer` tests
+	@echo "Running ASan tests..."
+	ASAN_OPTIONS=detect_leaks=1 ./$(EXAMPLE_BINARY)
+	ASAN_OPTIONS=detect_leaks=1 ./$(TEST_BINARY)
+	ASAN_OPTIONS=detect_leaks=1 ./$(BENCH_BINARY)
+
 .PHONY: analyze
 analyze: ## Run Clang Static Analyzer
 	@echo "Running Clang Static Analyzer..."

@@ -83,7 +83,7 @@ example: $(EXAMPLE_BINARY) ## Run example program
 .PHONY: clean
 clean: ## Remove build artifacts
 	@echo "Cleaning up build artifacts..."
-	rm -rf $(BIN_DIR) $(DOC_DIR) *.gcno *.gcda *.gcov
+	rm -rf $(BIN_DIR) $(DOC_DIR)/* *.gcno *.gcda *.gcov
 
 .PHONY: format
 format: ## Format source code

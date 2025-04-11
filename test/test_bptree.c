@@ -93,7 +93,7 @@ static bptree *create_test_tree_with_order(int max_keys) {
 }
 #endif
 
-static const int test_max_keys_values[] = {3, 4, 7, DEFAULT_MAX_KEYS};
+static const int test_max_keys_values[] = {3, 4, 7, 12, DEFAULT_MAX_KEYS};
 static const int num_test_max_keys = sizeof(test_max_keys_values) / sizeof(test_max_keys_values[0]);
 
 static int tests_run = 0;

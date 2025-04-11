@@ -2,7 +2,7 @@
 SHELL := bash
 
 # Build configuration
-CC ?= clang
+CC ?= clang # or gcc
 ENABLE_ASAN ?= 0
 BUILD_TYPE ?= debug
 
@@ -83,7 +83,7 @@ example: $(EXAMPLE_BINARY) ## Run example program
 .PHONY: clean
 clean: ## Remove build artifacts
 	@echo "Cleaning up build artifacts..."
-	rm -rf $(BIN_DIR) $(DOC_DIR) *.gcno *.gcda *.gcov
+	rm -rf $(BIN_DIR) $(DOC_DIR)/* *.gcno *.gcda *.gcov
 
 .PHONY: format
 format: ## Format source code
@@ -130,11 +130,6 @@ doc: ## Generate documentation using Doxygen
 	@test -f Doxyfile || { echo "Error: Doxyfile not found."; exit 1; }
 	doxygen Doxyfile
 
-.PHONY: figure
-figure: ## Generate figures using Graphviz
-	@echo "Generating figures..."
-	@$(SHELL) $(ASSET_DIR)/make_figures.sh $(ASSET_DIR)
-
 ##############################################################################################################
 ## Release and Debugging Targets
 ##############################################################################################################
@@ -164,9 +159,20 @@ profile: clean $(BENCH_BINARY) ## Build and run with gprof profiling
 .PHONY: ubsan
 ubsan: CFLAGS += -fsanitize=undefined
 ubsan: LDFLAGS += -fsanitize=undefined
-ubsan: clean $(TEST_BINARY) ## Run tests with UndefinedBehaviorSanitizer
+ubsan: clean $(TEST_BINARY) $(BENCH_BINARY) $(EXAMPLE_BINARY) ## Run `undefined behavior sanitizer` tests
 	@echo "Running UBSan tests..."
+	UBSAN_OPTIONS=print_stacktrace=1 ./$(EXAMPLE_BINARY)
 	UBSAN_OPTIONS=print_stacktrace=1 ./$(TEST_BINARY)
+	UBSAN_OPTIONS=print_stacktrace=1 ./$(BENCH_BINARY)
+
+.PHONY: asan
+asan: CFLAGS += -fsanitize=address
+asan: LDFLAGS += -fsanitize=address
+asan: clean $(TEST_BINARY) $(BENCH_BINARY) $(EXAMPLE_BINARY) ## Run `address sanitizer` tests
+	@echo "Running ASan tests..."
+	ASAN_OPTIONS=detect_leaks=1 ./$(EXAMPLE_BINARY)
+	ASAN_OPTIONS=detect_leaks=1 ./$(TEST_BINARY)
+	ASAN_OPTIONS=detect_leaks=1 ./$(BENCH_BINARY)
 
 .PHONY: analyze
 analyze: ## Run Clang Static Analyzer

@@ -22,6 +22,7 @@ A B+ tree implementation in C
 ---
 
 Bptree is a single-header, generic [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree) implementation written in C.
+It can be thought of an in-memory ordered key-value map where keys are stored.
 
 ### Features
 

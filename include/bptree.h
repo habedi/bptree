@@ -1,3 +1,53 @@
+/**
+ * @file bptree.h
+ * @brief A customizable single-header B+ tree implementation in C.
+ *
+ * Bptree library provides a generic B+ tree data structure for efficient searching.
+ * It needs only a C compiler supporting C11 standard or later.
+ *
+ * ===============================================================================
+ * Configuration:
+ * ===============================================================================
+ * Key/value types and linkage can be customized via macros defined BEFORE
+ * including the header (e.g., BPTREE_NUMERIC_TYPE, BPTREE_VALUE_TYPE,
+ * BPTREE_KEY_TYPE_STRING/BPTREE_KEY_SIZE, BPTREE_STATIC).
+ * See implementation details for specific macro effects.
+ *
+ * ===============================================================================
+ * Usage:
+ * ===============================================================================
+ *
+ * 1. Include this header ("bptree.h") in your source files for declarations.
+ * 2. In EXACTLY ONE C source file, define BPTREE_IMPLEMENTATION before including
+ * this header to generate the function implementations.
+ *
+ * Example (in one .c file):
+ * #define BPTREE_IMPLEMENTATION
+ * // Optional: Define config macros here if needed
+ * #include "bptree.h"
+ *
+ * ===============================================================================
+ * Notes:
+ * ===============================================================================
+ *
+ * - Error Handling:
+ * - Functions return `bptree_status` codes; check for `BPTREE_OK` for success.
+ *
+ * - Memory Management:
+ * - The tree manages memory for its internal nodes.
+ * - The tree DOES NOT manage memory for stored values (type `BPTREE_VALUE_TYPE`).
+ * If storing pointers, the caller must allocate/free the pointed-to data.
+ * - Call `bptree_free()` to release tree structure memory (does not free values).
+ *
+ * - Thread Safety:
+ * - This implementation is NOT thread-safe. Caller must provide external
+ * synchronization (e.g., mutexes) for concurrent access.
+ *
+ * @version 0.4.0-beta
+ * @author  "Hassan Abedi <hassan.abedi.t+bptree@gmail.com>"
+ * @copyright MIT License
+ */
+
 #ifndef BPTREE_H
 #define BPTREE_H
 
@@ -118,7 +168,9 @@ static size_t bptree_keys_area_size(const int max_keys) {
     return keys_size + pad;
 }
 
-static bptree_key_t *bptree_node_keys(const bptree_node *node) { return (bptree_key_t *)node->data; }
+static bptree_key_t *bptree_node_keys(const bptree_node *node) {
+    return (bptree_key_t *)node->data;
+}
 
 static bptree_value_t *bptree_node_values(bptree_node *node, const int max_keys) {
     const size_t offset = bptree_keys_area_size(max_keys);
@@ -245,7 +297,8 @@ static bool bptree_check_invariants_node(bptree_node *node, const bptree *tree, 
                 return false;
             }
             if (node->num_keys > 0 && (children[0]->num_keys > 0 || !children[0]->is_leaf)) {
-                const bptree_key_t max_in_child0 = bptree_find_largest_key(children[0], tree->max_keys);
+                const bptree_key_t max_in_child0 =
+                    bptree_find_largest_key(children[0], tree->max_keys);
                 if (tree->compare(&max_in_child0, &keys[0]) >= 0) {
                     bptree_debug_print(tree->enable_debug,
                                        "Invariant Fail: max(child[0]) >= key[0] in node %p -- "
@@ -374,7 +427,8 @@ static void bptree_rebalance_up(bptree *tree, bptree_node **node_stack, const in
                            child_idx, child->num_keys, min_keys);
         if (child_idx > 0) {
             bptree_node *left_sibling = children[child_idx - 1];
-            const int left_min = left_sibling->is_leaf ? tree->min_leaf_keys : tree->min_internal_keys;
+            const int left_min =
+                left_sibling->is_leaf ? tree->min_leaf_keys : tree->min_internal_keys;
             if (left_sibling->num_keys > left_min) {
                 bptree_debug_print(tree->enable_debug,
                                    "Attempting borrow from left sibling (idx %d)\n", child_idx - 1);
@@ -383,7 +437,8 @@ static void bptree_rebalance_up(bptree *tree, bptree_node **node_stack, const in
                     bptree_key_t *child_keys = bptree_node_keys(child);
                     bptree_value_t *child_vals = bptree_node_values(child, tree->max_keys);
                     const bptree_key_t *left_keys = bptree_node_keys(left_sibling);
-                    const bptree_value_t *left_vals = bptree_node_values(left_sibling, tree->max_keys);
+                    const bptree_value_t *left_vals =
+                        bptree_node_values(left_sibling, tree->max_keys);
                     memmove(&child_keys[1], &child_keys[0], child->num_keys * sizeof(bptree_key_t));
                     memmove(&child_vals[1], &child_vals[0],
                             child->num_keys * sizeof(bptree_value_t));
@@ -418,7 +473,8 @@ static void bptree_rebalance_up(bptree *tree, bptree_node **node_stack, const in
         }
         if (child_idx < parent->num_keys) {
             bptree_node *right_sibling = children[child_idx + 1];
-            const int right_min = right_sibling->is_leaf ? tree->min_leaf_keys : tree->min_internal_keys;
+            const int right_min =
+                right_sibling->is_leaf ? tree->min_leaf_keys : tree->min_internal_keys;
             if (right_sibling->num_keys > right_min) {
                 bptree_debug_print(tree->enable_debug,
                                    "Attempting borrow from right sibling (idx %d)\n",
@@ -536,7 +592,8 @@ static void bptree_rebalance_up(bptree *tree, bptree_node **node_stack, const in
                 bptree_key_t *child_keys = bptree_node_keys(child);
                 bptree_value_t *child_vals = bptree_node_values(child, tree->max_keys);
                 const bptree_key_t *right_keys = bptree_node_keys(right_sibling);
-                const bptree_value_t *right_vals = bptree_node_values(right_sibling, tree->max_keys);
+                const bptree_value_t *right_vals =
+                    bptree_node_values(right_sibling, tree->max_keys);
                 const int combined_keys = child->num_keys + right_sibling->num_keys;
                 if (combined_keys > tree->max_keys) {
                     fprintf(stderr,
@@ -607,7 +664,8 @@ static void bptree_rebalance_up(bptree *tree, bptree_node **node_stack, const in
     }
 }
 
-static int bptree_node_search(const bptree *tree, const bptree_node *node, const bptree_key_t *key) {
+static int bptree_node_search(const bptree *tree, const bptree_node *node,
+                              const bptree_key_t *key) {
     int low = 0, high = node->num_keys;
     const bptree_key_t *keys = bptree_node_keys(node);
     if (node->is_leaf) {
@@ -685,8 +743,10 @@ static bptree_status bptree_insert_internal(bptree *tree, bptree_node *node,
         bptree_key_t child_promoted_key;
         bptree_node *child_new_node = NULL;
         const bptree_status status = bptree_insert_internal(tree, children[pos], key, value,
-                                                      &child_promoted_key, &child_new_node);
-        if (status != BPTREE_OK || child_new_node == NULL) {return status;}
+                                                            &child_promoted_key, &child_new_node);
+        if (status != BPTREE_OK || child_new_node == NULL) {
+            return status;
+        }
         bptree_debug_print(tree->enable_debug,
                            "Child split propagated. Inserting promoted key into internal node.\n");
         bptree_key_t *keys = bptree_node_keys(node);
@@ -852,8 +912,12 @@ BPTREE_API bptree_status bptree_get_range(const bptree *tree, const bptree_key_t
     }
     *out_values = NULL;
     *n_results = 0;
-    if (tree->compare(start, end) > 0) {        return BPTREE_INVALID_ARGUMENT;    }
-    if (tree->count == 0) {        return BPTREE_OK;    }
+    if (tree->compare(start, end) > 0) {
+        return BPTREE_INVALID_ARGUMENT;
+    }
+    if (tree->count == 0) {
+        return BPTREE_OK;
+    }
     bptree_node *node = tree->root;
     while (!node->is_leaf) {
         const int pos = bptree_node_search(tree, node, start);

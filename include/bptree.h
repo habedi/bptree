@@ -1,8 +1,8 @@
 /**
  * @file bptree.h
- * @brief A customizable single-header B+ tree implementation in C.
+ * @brief A single-header B+ tree implementation in C.
  *
- * Bptree library provides a generic B+ tree data structure for efficient searching.
+ * Bptree library provides a generic B+ tree data structure for an in-memory ordered map.
  * It needs only a C compiler supporting C11 standard or later.
  *
  * ===============================================================================

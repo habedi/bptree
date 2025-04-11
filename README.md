@@ -116,7 +116,7 @@ The key and value types, as well as linkage (static or dynamic), can be customiz
 | `bptree_value_t` | The C type representing a value. Resolved from `BPTREE_VALUE_TYPE`.             | `void *`                                         |
 
 > [!IMPORTANT]
-> The tree only manages memory for its internal nodes. If the bptree_value_t items stored are pointers (e.g., `void *` or `struct
+> The tree only manages memory for its internal nodes. If the `bptree_value_t` items stored are pointers (e.g., `void *` or `struct
 > my_data *`), the caller is responsible for managing the memory pointed to by these values (allocation and deallocation).
 > Consequently, `bptree_free` only frees the tree's internal structure, not any external data referenced by the stored values.
 

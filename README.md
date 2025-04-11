@@ -26,7 +26,7 @@ Bptree is a single-header, generic [B+ tree](https://en.wikipedia.org/wiki/B%2B_
 ### Features
 
 - Single-header C library (see [bptree.h](include/bptree.h))
-- Supports numeric and string keys and custom value types
+- Supports numeric and string keys as well as custom value types
 - Supports insertion, deletion, as well as point and range queries
 - Allows the user to manage memory for values
 - Compatible with C11 or newer

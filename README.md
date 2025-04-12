@@ -21,12 +21,25 @@ A B+ tree implementation in C
 
 ---
 
-Bptree is a single-header, generic [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree) implementation written in C.
+Bptree is a lightweight single-header [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree) implementation written in C.
+It can be thought of as an in-memory ordered map where keys are stored based on the ordering defined by some comparator function,
+and values can be any type of data.
+I created this library primarily to learn about B+ trees.
+It is a fully functional implementation for in-memory storage with a simple API that covers the core operations of a conventional
+B+ tree.
+
+The B+ tree is a variant of the [B-tree](https://en.wikipedia.org/wiki/B-tree) data structure.
+It is a self-balancing n-ary tree (each node in the tree can have at most n children) like B-tree,
+but unlike B-tree, all values are stored in the leaf nodes.
+The internal nodes only store keys to guide the search process.
+B+ trees are widely used in databases and file systems due to their efficiency in providing IO-optimized data access patterns.
+Note that B+ trees are not suitable for random access like for building hash tables.
+They are mainly used for ordered data access and range queries as part of a larger system.
 
 ### Features
 
-- Single-header C library (see [bptree.h](include/bptree.h))
-- Supports numeric and string keys and custom value types
+- Lightweight single-header C library (see [bptree.h](include/bptree.h))
+- Supports numeric and string keys as well as custom value types
 - Supports insertion, deletion, as well as point and range queries
 - Allows the user to manage memory for values
 - Compatible with C11 or newer
@@ -65,22 +78,32 @@ To generate the documentation, use the `make doc` command and then open the `doc
 | Function                    | Return Type     | Description                                                                                                                                                                          |
 |:----------------------------|:----------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `bptree_create`             | `bptree *`      | Creates a new B+ tree with specified `max_keys`, comparator function (or `NULL` for default), and debug flag. Returns pointer to the tree or `NULL` on failure.                      |
-| `bptree_free`               | `void`          | Frees the tree structure and all its internal nodes. It does not free memory for values stored in the tree.                                                                          |
+| `bptree_free`               | `void`          | Frees the tree structure and all its internal nodes. (This function does not free memory for values stored in the tree.)                                                             |
 | `bptree_put`                | `bptree_status` | Inserts a key-value pair. The key must not already exist in the tree.                                                                                                                |
 | `bptree_get`                | `bptree_status` | Retrieves the value associated with a key via an out-parameter.                                                                                                                      |
 | `bptree_contains`           | `bool`          | Checks if a key exists in the tree.                                                                                                                                                  |
 | `bptree_remove`             | `bptree_status` | Deletes a key-value pair. Performs node rebalancing (key borrowing and node merging) if necessary.                                                                                   |
 | `bptree_get_range`          | `bptree_status` | Gets values for keys within `[start, end]` (inclusive) via out-parameters for the results array and count. The caller must free the results array using `bptree_free_range_results`. |
 | `bptree_free_range_results` | `void`          | Frees the array allocated by `bptree_get_range`.                                                                                                                                     |
-| `bptree_get_stats`          | `bptree_stats`  | Returns tree statistics (count, height, node_count) by value.                                                                                                                        |
+| `bptree_get_stats`          | `bptree_stats`  | Returns tree statistics, including key count, height, and node count of the tree.                                                                                                    |
 | `bptree_check_invariants`   | `bool`          | Checks structural correctness of the B+ tree (e.g., key ordering, node fill levels, and leaf depth).                                                                                 
 
-| Type             | Description                                                                           |
-|:-----------------|:--------------------------------------------------------------------------------------|
-| `bptree`         | The main B+ tree data structure.                                                      |
-| `bptree_key_t`   | The data type used for keys (configurable, defaults to `int64_t`).                    |
-| `bptree_value_t` | The data type used for values (configurable, defaults to `void *`).                   |
-| `bptree_status`  | Enum returned by most API functions showing success or failure (types) of operations. |
+| Type             | Description                                                                                |
+|:-----------------|:-------------------------------------------------------------------------------------------|
+| `bptree`         | The main B+ tree data structure.                                                           |
+| `bptree_stats`   | The data type used for tree statistics (including key count, tree height, and node count). |
+| `bptree_key_t`   | The data type used for keys (configurable; default: `int64_t`).                            |
+| `bptree_value_t` | The data type used for values (configurable; default: `void *`).                           |
+| `bptree_status`  | Enum returned by most API functions showing success or failure (types) of operations.      |
+
+> [!NOTE]
+> The comparator function should have a signature similar `strcmp` where it returns a negative value if the first argument should
+> come before the second (e.g., `a < b`), zero if they are equal, and a positive value if the first argument should come after the
+> second (e.g., `a > b`).
+> The B+ tree implementation relies on this specific behavior for correctly ordering keys in nodes and traversing the tree
+> during search, insertion, and deletion operations.
+> The default comparators provided in your code (`bptree_default_compare` for numeric types using `<` and `>`, and the one using
+> `memcmp` for strings) adhere to this convention.
 
 #### Status Codes
 
@@ -116,7 +139,7 @@ The key and value types, as well as linkage (static or dynamic), can be customiz
 | `bptree_value_t` | The C type representing a value. Resolved from `BPTREE_VALUE_TYPE`.             | `void *`                                         |
 
 > [!IMPORTANT]
-> The tree only manages memory for its internal nodes. If the bptree_value_t items stored are pointers (e.g., `void *` or `struct
+> The tree only manages memory for its internal nodes. If the `bptree_value_t` items stored are pointers (e.g., `void *` or `struct
 > my_data *`), the caller is responsible for managing the memory pointed to by these values (allocation and deallocation).
 > Consequently, `bptree_free` only frees the tree's internal structure, not any external data referenced by the stored values.
 

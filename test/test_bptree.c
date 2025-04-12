@@ -10,7 +10,7 @@
  * Tests are run for various tree orders (max_keys values).
  * String key support can be tested by defining BPTREE_KEY_TYPE_STRING during compilation.
  *
- * @version 0.4.0-beta
+ * @version 0.4.1-beta
  */
 
 #include <assert.h>

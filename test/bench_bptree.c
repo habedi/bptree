@@ -12,7 +12,7 @@
  * Benchmark parameters (number of items `N`, tree order `MAX_ITEMS`, random seed `SEED`)
  * can be configured via environment variables.
  *
- * @version 0.4.0-beta
+ * @version 0.4.1-beta
  */
 
 #define BPTREE_IMPLEMENTATION  // Include the bptree implementation

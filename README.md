@@ -24,9 +24,9 @@ A B+ tree implementation in C
 Bptree is a lightweight single-header [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree) implementation written in C.
 It can be thought of as an in-memory ordered map where keys are stored based on the ordering defined by some comparator function,
 and values can be any type of data.
-I created this library primarily to learn about B+ trees.
-It is a fully functional implementation for in-memory storage with a simple API that covers the core operations of a conventional
-B+ tree.
+This library started as a personal project to learn about B+ trees and their internal details.
+It now provides a fully functional implementation for in-memory storage with a simple API covering the core operations of a
+typical B+ tree.
 
 The B+ tree is a variant of the [B-tree](https://en.wikipedia.org/wiki/B-tree) data structure.
 It is a self-balancing n-ary tree (each node in the tree can have at most n children) like B-tree,

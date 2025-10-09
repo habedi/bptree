@@ -1,13 +1,19 @@
 name: Run Test
 
 on:
-  workflow_dispatch:  # Allow manual runs
+  workflow_dispatch:
   push:
     tags:
-      - 'v*'  # Trigger on version tags
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:

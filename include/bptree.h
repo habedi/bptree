@@ -567,10 +567,9 @@ static bool bptree_check_invariants_node(bptree_node* node, const bptree* tree, 
                     bptree_key_t min_in_child =
                         bptree_find_smallest_key(children[i], tree->max_keys);
                     if (tree->compare(&keys[i - 1], &min_in_child) != 0) {
-                        bptree_debug_print(
-                            tree->enable_debug,
-                            "Invariant Fail: key[%d] != min(child[%d]) in node %p\n", i - 1, i,
-                            (void*)node);
+                        bptree_debug_print(tree->enable_debug,
+                                           "Invariant Fail: key[%d] != min(child[%d]) in node %p\n",
+                                           i - 1, i, (void*)node);
                         return false;
                     }
                     if (i < node->num_keys) {
@@ -948,7 +947,7 @@ static void bptree_rebalance_up(bptree* tree, bptree_node** node_stack, const in
         }
     }
     // Check for the special case where the root becomes empty and the height can be reduced.
-    if (!tree->root->is_leaf && tree->root->num_keys == 0 && tree->count > 0) {
+    if (tree->root && !tree->root->is_leaf && tree->root->num_keys == 0 && tree->count > 0) {
         bptree_debug_print(tree->enable_debug,
                            "Root node is internal and empty, shrinking height.\n");
         bptree_node* old_root = tree->root;

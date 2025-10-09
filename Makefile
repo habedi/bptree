@@ -94,7 +94,7 @@ format: ## Format source code
 .PHONY: lint
 lint: ## Run linter checks
 	@echo "Running linters..."
-	cppcheck --enable=all --inconclusive --quiet --std=c11 -I$(INC_DIR) $(TEST_DIR)
+	cppcheck --enable=all --inconclusive --quiet --std=c11 -I$(INC_DIR) --suppress=missingIncludeSystem $(TEST_DIR)
 
 .PHONY: install
 install: ## Install header file system-wide
@@ -203,3 +203,19 @@ cachegrind: $(BENCH_BINARY) ## Profile CPU cache usage using Valgrind's cachegri
 trace: $(BENCH_BINARY) ## Trace syscalls using strace
 	strace -o trace.log -T -tt ./$(BENCH_BINARY)
 	@echo "Syscall trace saved to trace.log"
+
+.PHONY: setup-hooks
+setup-hooks: ## Install Git hooks (pre-commit and pre-push)
+	@echo "Setting up Git hooks..."
+	@if ! command -v pre-commit &> /dev/null; then \
+	   echo "pre-commit not found. Please install it using 'pip install pre-commit'"; \
+	   exit 1; \
+	fi
+	@pre-commit install --hook-type pre-commit
+	@pre-commit install --hook-type pre-push
+	@pre-commit install-hooks
+
+.PHONY: test-hooks
+test-hooks: ## Test Git hooks on all files
+	@echo "Testing Git hooks..."
+	@pre-commit run --all-files --show-diff-on-failure

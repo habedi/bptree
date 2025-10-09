@@ -566,10 +566,11 @@ static bool bptree_check_invariants_node(bptree_node* node, const bptree* tree, 
                 if (children[i]->num_keys > 0 || !children[i]->is_leaf) {
                     bptree_key_t min_in_child =
                         bptree_find_smallest_key(children[i], tree->max_keys);
-                    if (tree->compare(&keys[i - 1], &min_in_child) > 0) {
-                        bptree_debug_print(tree->enable_debug,
-                                           "Invariant Fail: key[%d] > min(child[%d]) in node %p\n",
-                                           i - 1, i, (void*)node);
+                    if (tree->compare(&keys[i - 1], &min_in_child) != 0) {
+                        bptree_debug_print(
+                            tree->enable_debug,
+                            "Invariant Fail: key[%d] != min(child[%d]) in node %p\n", i - 1, i,
+                            (void*)node);
                         return false;
                     }
                     if (i < node->num_keys) {
@@ -1209,18 +1210,23 @@ BPTREE_API bptree_status bptree_remove(bptree* tree, const bptree_key_t* key) {
                        node->num_keys, tree->count);
     // Update parent's separator if the smallest key in the leaf has changed.
     if (pos == 0 && depth > 0 && node->num_keys > 0) {
-        const int parent_child_idx = index_stack[depth - 1];
-        if (parent_child_idx > 0) {
-            const int separator_idx = parent_child_idx - 1;
-            bptree_node* parent = node_stack[depth - 1];
-            bptree_key_t* parent_keys = bptree_node_keys(parent);
-            if (separator_idx < parent->num_keys &&
-                tree->compare(&parent_keys[separator_idx], &deleted_key_copy) == 0) {
-                bptree_debug_print(
-                    tree->enable_debug,
-                    "Updating parent separator key [%d] after deleting smallest leaf key.\n",
-                    separator_idx);
-                parent_keys[separator_idx] = keys[0];
+        // The smallest key in `node` was deleted. We must find the separator key
+        // in an ancestor that referred to the deleted key and update it to the
+        // new smallest key in `node`.
+        for (int d = depth - 1; d >= 0; d--) {
+            const int parent_child_idx = index_stack[d];
+            if (parent_child_idx > 0) {
+                bptree_node* parent = node_stack[d];
+                bptree_key_t* parent_keys = bptree_node_keys(parent);
+                const int separator_idx = parent_child_idx - 1;
+                if (separator_idx < parent->num_keys &&
+                    tree->compare(&parent_keys[separator_idx], &deleted_key_copy) == 0) {
+                    bptree_debug_print(tree->enable_debug,
+                                       "Updating ancestor separator key [%d] at depth %d.\n",
+                                       separator_idx, d);
+                    parent_keys[separator_idx] = keys[0];
+                    break;  // Found and updated the key, no need to go higher.
+                }
             }
         }
     }

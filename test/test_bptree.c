@@ -994,6 +994,61 @@ void test_deletion_and_merge_stress(void) {
 }
 
 /**
+ * @brief Test: Deletion of a key that requires updating a separator in an ancestor node.
+ *
+ * This test constructs a tree of height 3 where a key exists both in a leaf
+ * and as a separator in the grandparent node. It then deletes the key from the
+ * leaf and verifies that the separator key in the grandparent is correctly updated.
+ * This scenario is critical for ensuring the tree's structural integrity after deletion.
+ */
+void test_ancestor_key_update_on_delete(void) {
+    const int order = 3;  // Use a small order to control tree structure precisely
+    bptree* tree = create_test_tree_with_order(order);
+    ASSERT(tree != NULL, "Tree creation failed for ancestor update test");
+
+    // --- Phase 1: Construct a tree of height 3 ---
+    // This sequence of insertions is carefully chosen to create a tree of height 3
+    // with a specific structure. The key `13` will be a separator in the root.
+    const int keys_to_insert[] = {10, 20, 30, 5, 15, 25, 35, 13, 18, 28, 38, 1, 3, 6, 8};
+    const int num_keys = sizeof(keys_to_insert) / sizeof(keys_to_insert[0]);
+
+    for (int i = 0; i < num_keys; i++) {
+        bptree_key_t k = (bptree_key_t)keys_to_insert[i];
+        bptree_put(tree, &k, MAKE_VALUE_NUM(k));
+    }
+
+    bptree_stats stats_before = bptree_get_stats(tree);
+    ASSERT(stats_before.height == 3, "Test setup failed: Tree height is not 3, but %d",
+           stats_before.height);
+
+    // --- Phase 2: Delete a key that is also a separator in a non-parent ancestor ---
+    // At this point, the key `13` is the smallest key in a leaf and also a separator
+    // in the root node (the grandparent of the leaf). Deleting it should trigger an update
+    // in the root. The new smallest key in the leaf will be 15.
+    bptree_key_t key_to_delete = 13;
+    bptree_status st = bptree_remove(tree, &key_to_delete);
+    ASSERT(st == BPTREE_OK, "Deletion of key 13 failed unexpectedly");
+
+    // --- Phase 3: Verify tree integrity ---
+    // The bug is that the separator in the root is NOT updated. A weak invariant check
+    // might pass here, but a strict one should fail. After fixing the bug, the
+    // invariant check must pass.
+    bool invariants_ok = bptree_check_invariants(tree);
+    ASSERT(invariants_ok, "Invariants check failed after deleting key requiring ancestor update");
+
+    // Also, verify that the deleted key is truly gone and a key from the same leaf is present.
+    bptree_value_t dummy_val;
+    ASSERT(bptree_get(tree, &key_to_delete, &dummy_val) == BPTREE_KEY_NOT_FOUND,
+           "Deleted key 13 was found in the tree");
+
+    bptree_key_t neighbouring_key = 15;
+    ASSERT(bptree_get(tree, &neighbouring_key, &dummy_val) == BPTREE_OK,
+           "Key 15 (neighbour of deleted key) was not found");
+
+    bptree_free(tree);
+}
+
+/**
  * @brief Main entry point for the B+ tree test suite.
  *
  * Runs a series of test functions to validate the bptree library.
@@ -1051,6 +1106,7 @@ int main(void) {
     RUN_TEST(test_stress);
     RUN_TEST(test_mixed_insert_delete);  // Often catches complex rebalancing issues
     RUN_TEST(test_deletion_and_merge_stress);
+    RUN_TEST(test_ancestor_key_update_on_delete);
 
     // --- Test Summary ---
     fprintf(stderr, "----------------------------------------\n");

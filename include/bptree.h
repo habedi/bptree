@@ -851,18 +851,18 @@ static void bptree_rebalance_up(bptree *tree, bptree_node **node_stack, const in
                 bptree_key_t *parent_keys = bptree_node_keys(parent);
                 const int combined_keys = left_sibling->num_keys + 1 + child->num_keys;
                 const int combined_children = (left_sibling->num_keys + 1) + (child->num_keys + 1);
-                if (combined_keys > tree->max_keys + 1) {
+                if (combined_keys > tree->max_keys) {
                     fprintf(stderr,
                             "[BPTree FATAL] Merge-Left (Internal) Key Buffer Overflow PREVENTED! "
                             "Combined keys %d > buffer %d.\n",
-                            combined_keys, tree->max_keys + 1);
+                            combined_keys, tree->max_keys);
                     abort();
                 }
-                if (combined_children > tree->max_keys + 2) {
+                if (combined_children > tree->max_keys + 1) {
                     fprintf(stderr,
                             "[BPTree FATAL] Merge-Left (Internal) Children Buffer Overflow "
                             "PREVENTED! Combined children %d > buffer %d.\n",
-                            combined_children, tree->max_keys + 2);
+                            combined_children, tree->max_keys + 1);
                     abort();
                 }
                 left_keys[left_sibling->num_keys] = parent_keys[child_idx - 1];
@@ -917,18 +917,18 @@ static void bptree_rebalance_up(bptree *tree, bptree_node **node_stack, const in
                 const bptree_key_t *parent_keys = bptree_node_keys(parent);
                 const int combined_keys = child->num_keys + 1 + right_sibling->num_keys;
                 const int combined_children = (child->num_keys + 1) + (right_sibling->num_keys + 1);
-                if (combined_keys > tree->max_keys + 1) {
+                if (combined_keys > tree->max_keys) {
                     fprintf(stderr,
                             "[BPTree FATAL] Merge-Right (Internal) Key Buffer Overflow PREVENTED! "
                             "Combined keys %d > buffer %d.\n",
-                            combined_keys, tree->max_keys + 1);
+                            combined_keys, tree->max_keys);
                     abort();
                 }
-                if (combined_children > tree->max_keys + 2) {
+                if (combined_children > tree->max_keys + 1) {
                     fprintf(stderr,
                             "[BPTree FATAL] Merge-Right (Internal) Children Buffer Overflow "
                             "PREVENTED! Combined children %d > buffer %d.\n",
-                            combined_children, tree->max_keys + 2);
+                            combined_children, tree->max_keys + 1);
                     abort();
                 }
                 child_keys[child->num_keys] = parent_keys[child_idx];

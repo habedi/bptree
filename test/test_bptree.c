@@ -877,6 +877,86 @@ void test_stress(void) {
 }
 
 /**
+ * @brief Test: Stress test with a large number of random deletions.
+ *
+ * Inserts a sequence of keys and then deletes a large fraction of them
+ * in a random order. This is designed to trigger complex rebalancing and
+ * merge scenarios that might be missed by sequential deletion patterns.
+ * Invariants are checked after every single operation to catch transient errors.
+ */
+void test_deletion_and_merge_stress(void) {
+    const int order = 4;  // Use a small order to trigger merges often
+    const int N = 200;    // Number of items to insert
+    const int D = 180;    // Number of items to delete
+
+    bptree *tree = create_test_tree_with_order(order);
+    ASSERT(tree != NULL, "Tree creation failed for deletion stress test");
+
+#ifdef BPTREE_KEY_TYPE_STRING
+    // This test is complex with string keys due to value memory management.
+    // It's primarily designed for numeric keys where values don't need freeing.
+    // A string implementation would require a map/hash table to track which
+    // values have been freed.
+    fprintf(stderr, "Skipping deletion_and_merge_stress for string keys.\n");
+    bptree_free(tree);
+    return;
+#else
+    // --- Phase 1: Insert N items sequentially ---
+    for (int i = 0; i < N; i++) {
+        bptree_key_t k = (bptree_key_t)i;
+        ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK,
+               "Stress delete setup: insert failed for key %d", i);
+        if (i % 10 == 0) {  // Check invariants periodically, not every time, for speed
+            ASSERT(bptree_check_invariants(tree),
+                   "Stress delete setup: invariants failed after inserting %d", i);
+        }
+    }
+    ASSERT(tree->count == N, "Count mismatch after insertion phase of stress delete test");
+    ASSERT(bptree_check_invariants(tree), "Invariants failed after full insertion phase");
+
+    // --- Phase 2: Create a shuffled list of keys to delete ---
+    bptree_key_t *keys_to_delete = malloc(N * sizeof(bptree_key_t));
+    ASSERT(keys_to_delete != NULL, "Failed to allocate memory for keys to delete");
+    for (int i = 0; i < N; i++) {
+        keys_to_delete[i] = (bptree_key_t)i;
+    }
+    // Fisher-Yates shuffle
+    srand((unsigned int)time(NULL));
+    for (int i = N - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+        bptree_key_t temp = keys_to_delete[i];
+        keys_to_delete[i] = keys_to_delete[j];
+        keys_to_delete[j] = temp;
+    }
+
+    // --- Phase 3: Delete D items in random order ---
+    for (int i = 0; i < D; i++) {
+        bptree_key_t k = keys_to_delete[i];
+        bptree_status st = bptree_remove(tree, &k);
+        ASSERT(st == BPTREE_OK, "Deletion of key %lld failed with status %d (i=%d)", (long long)k,
+               st, i);
+        ASSERT(bptree_check_invariants(tree), "Invariants failed after deleting key %lld (i=%d)",
+               (long long)k, i);
+    }
+
+    ASSERT(tree->count == N - D, "Count mismatch after deletions. Expected %d, got %d", N - D,
+           tree->count);
+
+    // --- Phase 4: Verify remaining keys are still present ---
+    for (int i = D; i < N; i++) {
+        bptree_key_t k = keys_to_delete[i];
+        bptree_value_t res;
+        ASSERT(bptree_get(tree, &k, &res) == BPTREE_OK,
+               "Could not find key %lld which should not have been deleted", (long long)k);
+        ASSERT(res == MAKE_VALUE_NUM(k), "Value mismatch for remaining key %lld", (long long)k);
+    }
+
+    free(keys_to_delete);
+    bptree_free(tree);
+#endif
+}
+
+/**
  * @brief Main entry point for the B+ tree test suite.
  *
  * Runs a series of test functions to validate the bptree library.
@@ -932,6 +1012,7 @@ int main(void) {
     RUN_TEST(test_precise_boundary_conditions);
     RUN_TEST(test_stress);
     RUN_TEST(test_mixed_insert_delete);  // Often catches complex rebalancing issues
+    RUN_TEST(test_deletion_and_merge_stress);
 
     // --- Test Summary ---
     fprintf(stderr, "----------------------------------------\n");

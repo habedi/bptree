@@ -38,7 +38,7 @@ const bool debug_enabled = false;
  * @param b Pointer to the second key.
  * @return -1 if *a < *b, 0 if *a == *b, 1 if *a > *b.
  */
-int compare_keys(const bptree_key_t *a, const bptree_key_t *b) {
+int compare_keys(const bptree_key_t* a, const bptree_key_t* b) {
     return (*a < *b) ? -1 : ((*a > *b) ? 1 : 0);
 }
 
@@ -52,9 +52,9 @@ int compare_keys(const bptree_key_t *a, const bptree_key_t *b) {
  * @param b Pointer to the second key (as `void*`).
  * @return -1 if *a < *b, 0 if *a == *b, 1 if *a > *b.
  */
-int compare_keys_qsort(const void *a, const void *b) {
-    const bptree_key_t *ka = (const bptree_key_t *)a;
-    const bptree_key_t *kb = (const bptree_key_t *)b;
+int compare_keys_qsort(const void* a, const void* b) {
+    const bptree_key_t* ka = (const bptree_key_t*)a;
+    const bptree_key_t* kb = (const bptree_key_t*)b;
     return (*ka < *kb) ? -1 : ((*ka > *kb) ? 1 : 0);
 }
 
@@ -87,10 +87,10 @@ int compare_keys_qsort(const void *a, const void *b) {
  * @param array The array of pointers to shuffle.
  * @param n The number of elements in the array.
  */
-void shuffle(void **array, const int n) {
+void shuffle(void** array, const int n) {
     for (int i = n - 1; i > 0; i--) {
         const int j = rand() % (i + 1);
-        void *temp = array[i];
+        void* temp = array[i];
         array[i] = array[j];
         array[j] = temp;
     }
@@ -105,7 +105,7 @@ void shuffle(void **array, const int n) {
  * @param pointers The array of pointers to shuffle in parallel.
  * @param n The number of elements in both arrays.
  */
-void shuffle_pair(bptree_key_t *keys, void **pointers, const int n) {
+void shuffle_pair(bptree_key_t* keys, void** pointers, const int n) {
     for (int i = n - 1; i > 0; i--) {
         const int j = rand() % (i + 1);
 
@@ -115,7 +115,7 @@ void shuffle_pair(bptree_key_t *keys, void **pointers, const int n) {
         keys[j] = temp_key;
 
         // Swap pointers
-        void *temp_ptr = pointers[i];
+        void* temp_ptr = pointers[i];
         pointers[i] = pointers[j];
         pointers[j] = temp_ptr;
     }
@@ -162,10 +162,10 @@ int main(void) {
     srand(seed);  // Seed the random number generator
 
     // --- Data Preparation ---
-    int *vals = malloc(N * sizeof(int));  // Actual integer values
-    bptree_key_t *keys_array =
-        malloc(N * sizeof(bptree_key_t));          // Keys (used for sequential access)
-    void **pointers = malloc(N * sizeof(void *));  // Pointers to store in the tree
+    int* vals = malloc(N * sizeof(int));  // Actual integer values
+    bptree_key_t* keys_array =
+        malloc(N * sizeof(bptree_key_t));         // Keys (used for sequential access)
+    void** pointers = malloc(N * sizeof(void*));  // Pointers to store in the tree
     if (!vals || !keys_array || !pointers) {
         perror("Allocation failed for base data arrays");
         exit(EXIT_FAILURE);
@@ -178,8 +178,8 @@ int main(void) {
     }
 
     // Create copies for shuffling
-    bptree_key_t *keys_copy = malloc(N * sizeof(bptree_key_t));
-    void **pointers_copy = malloc(N * sizeof(void *));
+    bptree_key_t* keys_copy = malloc(N * sizeof(bptree_key_t));
+    void** pointers_copy = malloc(N * sizeof(void*));
     if (!keys_copy || !pointers_copy) {
         perror("Allocation failed for copy arrays");
         free(vals);
@@ -190,10 +190,10 @@ int main(void) {
 
     // --- Benchmark: Random Insertion ---
     memcpy(keys_copy, keys_array, N * sizeof(bptree_key_t));
-    memcpy(pointers_copy, pointers, N * sizeof(void *));
+    memcpy(pointers_copy, pointers, N * sizeof(void*));
     shuffle_pair(keys_copy, pointers_copy, N);
     {
-        bptree *tree = bptree_create(max_keys, compare_keys, debug_enabled);
+        bptree* tree = bptree_create(max_keys, compare_keys, debug_enabled);
         if (!tree) {
             fprintf(stderr, "Failed to create tree\n");
             exit(EXIT_FAILURE);
@@ -208,7 +208,7 @@ int main(void) {
 
     // --- Benchmark: Sequential Insertion ---
     {
-        bptree *tree = bptree_create(max_keys, compare_keys, debug_enabled);
+        bptree* tree = bptree_create(max_keys, compare_keys, debug_enabled);
         if (!tree) {
             fprintf(stderr, "Failed to create tree\n");
             exit(EXIT_FAILURE);
@@ -222,7 +222,7 @@ int main(void) {
 
     // --- Prepare Tree for Search/Delete/Range Benchmarks ---
     printf("Populating tree for search/delete/range tests...\n");
-    bptree *test_tree = bptree_create(max_keys, compare_keys, debug_enabled);
+    bptree* test_tree = bptree_create(max_keys, compare_keys, debug_enabled);
     if (!test_tree) {
         fprintf(stderr, "Failed to create tree for tests\n");
         exit(EXIT_FAILURE);
@@ -241,7 +241,7 @@ int main(void) {
 
     // --- Benchmark: Random Search ---
     memcpy(keys_copy, keys_array, N * sizeof(bptree_key_t));
-    memcpy(pointers_copy, pointers, N * sizeof(void *));
+    memcpy(pointers_copy, pointers, N * sizeof(void*));
     shuffle_pair(keys_copy, pointers_copy, N);
     BENCH("Search (rand)", N, {
         bptree_value_t res;
@@ -263,12 +263,12 @@ int main(void) {
     int iterations = (N > 10000) ? 100 : 1000;
     printf("Running iterator benchmark with %d iterations...\n", iterations);
     BENCH("Iterator", iterations, {
-        bptree_node *leaf = test_tree->root;  // Use the already populated test_tree
+        bptree_node* leaf = test_tree->root;  // Use the already populated test_tree
         while (leaf && !leaf->is_leaf) {
             leaf = bptree_node_children(leaf, test_tree->max_keys)[0];
         }
         int count = 0;
-        for (bptree_node *cur = leaf; cur != NULL; cur = cur->next) {
+        for (bptree_node* cur = leaf; cur != NULL; cur = cur->next) {
             count += cur->num_keys;
         }
         iter_total += count;
@@ -294,7 +294,7 @@ int main(void) {
         if (idx > end_idx) end_idx = idx;  // Handle N <= delta case
 
         int found_count = 0;
-        bptree_value_t *res = NULL;
+        bptree_value_t* res = NULL;
         const bptree_status st =
             bptree_get_range(test_tree, &keys_array[idx], &keys_array[end_idx], &res, &found_count);
         assert(st == BPTREE_OK);
@@ -313,7 +313,7 @@ int main(void) {
         if (idx > end_idx) end_idx = idx;
 
         int found_count = 0;
-        bptree_value_t *res = NULL;
+        bptree_value_t* res = NULL;
         const bptree_status st =
             bptree_get_range(test_tree, &keys_array[idx], &keys_array[end_idx], &res, &found_count);
         assert(st == BPTREE_OK);
@@ -332,7 +332,7 @@ int main(void) {
         if (idx > end_idx) end_idx = idx;
 
         int found_count = 0;
-        bptree_value_t *res = NULL;
+        bptree_value_t* res = NULL;
         const bptree_status st =
             bptree_get_range(test_tree, &keys_array[idx], &keys_array[end_idx], &res, &found_count);
         assert(st == BPTREE_OK);
@@ -352,7 +352,7 @@ int main(void) {
         if (idx > end_idx) end_idx = idx;
 
         int found_count = 0;
-        bptree_value_t *res = NULL;
+        bptree_value_t* res = NULL;
         const bptree_status st =
             bptree_get_range(test_tree, &keys_array[idx], &keys_array[end_idx], &res, &found_count);
         assert(st == BPTREE_OK);
@@ -371,7 +371,7 @@ int main(void) {
         if (idx > end_idx) end_idx = idx;
 
         int found_count = 0;
-        bptree_value_t *res = NULL;
+        bptree_value_t* res = NULL;
         const bptree_status st =
             bptree_get_range(test_tree, &keys_array[idx], &keys_array[end_idx], &res, &found_count);
         assert(st == BPTREE_OK);
@@ -382,7 +382,7 @@ int main(void) {
 
     // --- Prepare for Deletion Benchmarks ---
     // Create deletion order using the populated test_tree for random deletion
-    int *deletion_order = malloc(N * sizeof(int));
+    int* deletion_order = malloc(N * sizeof(int));
     if (!deletion_order) {
         perror("Allocation failed for deletion_order");
         exit(EXIT_FAILURE);

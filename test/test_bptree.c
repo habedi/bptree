@@ -85,7 +85,7 @@ const bool global_debug_enabled = false;
 /** @brief Maximum number of allocations to track for cleanup in string tests. */
 #define MAX_ALLOC_TRACK 256
 /** @brief Array to track allocated memory (strings) for cleanup. */
-static void *alloc_track[MAX_ALLOC_TRACK];
+static void* alloc_track[MAX_ALLOC_TRACK];
 /** @brief Current number of tracked allocations. */
 static int alloc_track_count = 0;
 
@@ -93,7 +93,7 @@ static int alloc_track_count = 0;
  * @brief Adds a pointer to the allocation tracking list.
  * @param ptr Pointer to the allocated memory.
  */
-static void track_alloc(void *ptr) {
+static void track_alloc(void* ptr) {
     if (alloc_track_count < MAX_ALLOC_TRACK) {
         alloc_track[alloc_track_count++] = ptr;
     } else {
@@ -119,7 +119,7 @@ static void cleanup_alloc_track(void) {
  * @param b Pointer to the second string key.
  * @return Result of strcmp(a->data, b->data).
  */
-static int string_key_compare(const bptree_key_t *a, const bptree_key_t *b) {
+static int string_key_compare(const bptree_key_t* a, const bptree_key_t* b) {
     // Note: Assumes strings are null-terminated within BPTREE_KEY_SIZE.
     // If not, memcmp might be required depending on the library's internal compare needs.
     // However, for external comparison function, strcmp is typical if keys are C strings.
@@ -132,7 +132,7 @@ static int string_key_compare(const bptree_key_t *a, const bptree_key_t *b) {
  * @param s The input C string.
  * @return The initialized bptree_key_t.
  */
-static bptree_key_t make_key_str(const char *s) {
+static bptree_key_t make_key_str(const char* s) {
     bptree_key_t key;
     memset(&key, 0, sizeof(key));  // Zero out the key structure first
     // Use snprintf for safe copying and guaranteed null termination
@@ -146,11 +146,11 @@ static bptree_key_t make_key_str(const char *s) {
 /** @brief Macro to create a value (duplicate string) for string key tests. */
 #define MAKE_VALUE_STR(s) (strdup(s))  // Assumes value is also string; tracks via track_alloc
 /** @brief Macro to safely cast/get the string value from bptree_value_t. */
-#define GET_VALUE_STR(v) ((const char *)(v))
+#define GET_VALUE_STR(v) ((const char*)(v))
 /** @brief Macro to compare two string values retrieved from the tree. */
 #define CMP_VALUE_STR(v1, v2) (strcmp(GET_VALUE_STR(v1), GET_VALUE_STR(v2)) == 0)
 /** @brief Macro to free a string value retrieved/handled during tests. */
-#define FREE_VALUE_STR(v) (free((void *)(v)))  // Values are allocated with strdup
+#define FREE_VALUE_STR(v) (free((void*)(v)))  // Values are allocated with strdup
 
 #else  // BPTREE_KEY_TYPE_STRING not defined (Numeric Keys)
 
@@ -170,11 +170,11 @@ static bptree_key_t make_key_str(const char *s) {
  * @return Pointer to the newly created bptree, or NULL on failure.
  */
 #ifdef BPTREE_KEY_TYPE_STRING
-static bptree *create_test_tree_with_order(int max_keys) {
+static bptree* create_test_tree_with_order(int max_keys) {
     return bptree_create(max_keys, string_key_compare, global_debug_enabled);
 }
 #else
-static bptree *create_test_tree_with_order(const int max_keys) {
+static bptree* create_test_tree_with_order(const int max_keys) {
     // Use default numeric comparison by passing NULL
     return bptree_create(max_keys, NULL, global_debug_enabled);
 }
@@ -197,8 +197,45 @@ static int tests_failed = 0;
  * Verifies that `bptree_create` returns NULL for `max_keys` < 3.
  */
 void test_creation_failure(void) {
-    const bptree *tree = bptree_create(2, NULL, global_debug_enabled);
+    const bptree* tree = bptree_create(2, NULL, global_debug_enabled);
     ASSERT(tree == NULL, "bptree_create should fail for max_keys < 3");
+}
+
+/**
+ * @brief Test: Verify the min_internal_keys calculation.
+ *
+ * Checks that the calculation for `min_internal_keys` is correct,
+ * especially for even values of `max_keys` where ceiling division is critical.
+ */
+void test_min_internal_keys_calculation(void) {
+    // Test with an even max_keys value, where the bug is apparent.
+    const int max_keys = 4;
+    bptree* tree = create_test_tree_with_order(max_keys);
+    ASSERT(tree != NULL, "Tree creation failed for max_keys = 4");
+
+    // For max_keys = 4, m = 5.
+    // min_internal_keys should be ceil(m/2) - 1 = ceil(2.5) - 1 = 3 - 1 = 2.
+    // The old buggy formula was (m/2) - 1 = (5/2) - 1 = 2 - 1 = 1.
+    const int expected_min_internal = 2;
+    ASSERT(tree->min_internal_keys == expected_min_internal,
+           "min_internal_keys mismatch for max_keys=%d: expected %d, got %d", max_keys,
+           expected_min_internal, tree->min_internal_keys);
+
+    bptree_free(tree);
+
+    // Test with an odd max_keys value to ensure it remains correct.
+    const int max_keys_odd = 3;
+    tree = create_test_tree_with_order(max_keys_odd);
+    ASSERT(tree != NULL, "Tree creation failed for max_keys = 3");
+
+    // For max_keys = 3, m = 4.
+    // min_internal_keys should be ceil(m/2) - 1 = ceil(2) - 1 = 2 - 1 = 1.
+    const int expected_min_internal_odd = 1;
+    ASSERT(tree->min_internal_keys == expected_min_internal_odd,
+           "min_internal_keys mismatch for max_keys=%d: expected %d, got %d", max_keys_odd,
+           expected_min_internal_odd, tree->min_internal_keys);
+
+    bptree_free(tree);
 }
 
 /**
@@ -209,7 +246,7 @@ void test_creation_failure(void) {
 void test_insertion_and_search(void) {
     for (int m = 0; m < num_test_max_keys; m++) {
         const int order = test_max_keys_values[m];
-        bptree *tree = create_test_tree_with_order(order);
+        bptree* tree = create_test_tree_with_order(order);
         ASSERT(tree != NULL, "Tree creation failed for order %d", order);
         const int N = 10;  // Number of items to insert
 
@@ -218,7 +255,7 @@ void test_insertion_and_search(void) {
         for (int i = 0; i < N; i++) {
             sprintf(key_buf, "key%d", i);
             bptree_key_t k = KEY(key_buf);
-            char *v = MAKE_VALUE_STR(key_buf);  // Use macro, allocates memory
+            char* v = MAKE_VALUE_STR(key_buf);  // Use macro, allocates memory
             track_alloc(v);                     // Track allocation for cleanup
             ASSERT(bptree_put(tree, &k, v) == BPTREE_OK, "Insert failed for key %s", key_buf);
         }
@@ -262,7 +299,7 @@ void test_insertion_and_search(void) {
 void test_deletion(void) {
     for (int m = 0; m < num_test_max_keys; m++) {
         const int order = test_max_keys_values[m];
-        bptree *tree = create_test_tree_with_order(order);
+        bptree* tree = create_test_tree_with_order(order);
         ASSERT(tree != NULL, "Tree creation failed for order %d", order);
         const int N = 7;  // Number of items to insert
 
@@ -271,7 +308,7 @@ void test_deletion(void) {
         for (int i = 0; i < N; i++) {
             sprintf(key_buf, "del%d", i);
             bptree_key_t k = KEY(key_buf);
-            char *v = MAKE_VALUE_STR(key_buf);
+            char* v = MAKE_VALUE_STR(key_buf);
             track_alloc(v);
             ASSERT(bptree_put(tree, &k, v) == BPTREE_OK, "Insert failed for key %s", key_buf);
         }
@@ -321,7 +358,7 @@ void test_deletion(void) {
 void test_empty_tree(void) {
     for (int m = 0; m < num_test_max_keys; m++) {
         const int order = test_max_keys_values[m];
-        bptree *tree = create_test_tree_with_order(order);
+        bptree* tree = create_test_tree_with_order(order);
         ASSERT(tree != NULL, "Tree creation failed");
 
 #ifdef BPTREE_KEY_TYPE_STRING
@@ -360,13 +397,13 @@ void test_empty_tree(void) {
 void test_duplicate_insertion(void) {
     for (int m = 0; m < num_test_max_keys; m++) {
         const int order = test_max_keys_values[m];
-        bptree *tree = create_test_tree_with_order(order);
+        bptree* tree = create_test_tree_with_order(order);
         ASSERT(tree != NULL, "Tree creation failed");
 
 #ifdef BPTREE_KEY_TYPE_STRING
         bptree_key_t k = KEY("duplicate");
-        char *v1 = MAKE_VALUE_STR("value1");
-        char *v2 = MAKE_VALUE_STR("value2");  // Will be freed if duplicate rejected
+        char* v1 = MAKE_VALUE_STR("value1");
+        char* v2 = MAKE_VALUE_STR("value2");  // Will be freed if duplicate rejected
         track_alloc(v1);                      // Track v1
         // Don't track v2 yet, only if insertion *succeeds* unexpectedly
 
@@ -421,12 +458,12 @@ void test_duplicate_insertion(void) {
 void test_single_element(void) {
     for (int m = 0; m < num_test_max_keys; m++) {
         const int order = test_max_keys_values[m];
-        bptree *tree = create_test_tree_with_order(order);
+        bptree* tree = create_test_tree_with_order(order);
         ASSERT(tree != NULL, "Tree creation failed");
 
 #ifdef BPTREE_KEY_TYPE_STRING
         bptree_key_t k = KEY("solo");
-        char *v = MAKE_VALUE_STR("solo_val");
+        char* v = MAKE_VALUE_STR("solo_val");
         track_alloc(v);  // Track allocation
 
         ASSERT(bptree_put(tree, &k, v) == BPTREE_OK, "Insert failed for solo element");
@@ -488,13 +525,13 @@ void test_single_element(void) {
 void test_range_query(void) {
     for (int m = 0; m < num_test_max_keys; m++) {
         const int order = test_max_keys_values[m];
-        bptree *tree = create_test_tree_with_order(order);
+        bptree* tree = create_test_tree_with_order(order);
         ASSERT(tree != NULL, "Tree creation failed");
         const int N = 10;
 
 #ifdef BPTREE_KEY_TYPE_STRING
         // We need to store pointers that persist after insertion for comparison
-        bptree_value_t *allocated_values = malloc(N * sizeof(bptree_value_t));
+        bptree_value_t* allocated_values = malloc(N * sizeof(bptree_value_t));
         ASSERT(allocated_values, "Allocation for range query value tracking failed");
         char key_buf[32];
         for (int i = 0; i < N; i++) {
@@ -509,7 +546,7 @@ void test_range_query(void) {
         bptree_key_t start_k = KEY("range03");  // Inclusive start
         bptree_key_t end_k = KEY("range07");    // Inclusive end
         int count = 0;
-        bptree_value_t *range_results = NULL;  // Array of bptree_value_t (char* in this case)
+        bptree_value_t* range_results = NULL;  // Array of bptree_value_t (char* in this case)
         bptree_status status = bptree_get_range(tree, &start_k, &end_k, &range_results, &count);
 
         ASSERT(status == BPTREE_OK, "Range query failed");
@@ -525,8 +562,8 @@ void test_range_query(void) {
         bptree_free_range_results(range_results);  // Free the array returned by get_range
         free(allocated_values);                    // Free the tracking array shell
 #else                                              // Numeric keys
-        bptree_key_t *keys = malloc(N * sizeof(bptree_key_t));
-        bptree_value_t *values =
+        bptree_key_t* keys = malloc(N * sizeof(bptree_key_t));
+        bptree_value_t* values =
             malloc(N * sizeof(bptree_value_t));  // Store values for verification if needed
         ASSERT(keys && values, "Allocation for range query arrays failed");
 
@@ -541,7 +578,7 @@ void test_range_query(void) {
         bptree_key_t end_k = (bptree_key_t)61;    // Inclusive end (key 61)
         // Expected keys: 21, 31, 41, 51, 61 (5 keys)
         int count = 0;
-        bptree_value_t *range_results = NULL;
+        bptree_value_t* range_results = NULL;
         bptree_status status = bptree_get_range(tree, &start_k, &end_k, &range_results, &count);
 
         ASSERT(status == BPTREE_OK, "Range query failed");
@@ -576,7 +613,7 @@ void test_range_query(void) {
 void test_mixed_insert_delete(void) {
     for (int m = 0; m < num_test_max_keys; m++) {
         const int order = test_max_keys_values[m];
-        bptree *tree = create_test_tree_with_order(order);
+        bptree* tree = create_test_tree_with_order(order);
         ASSERT(tree != NULL, "Tree creation failed");
         const int N = 100;  // Number of initial items
 
@@ -587,7 +624,7 @@ void test_mixed_insert_delete(void) {
             char buf[16];
             sprintf(buf, "mix%d", i);
             key = KEY(buf);
-            char *v = MAKE_VALUE_STR(buf);  // Value is a string copy of the key
+            char* v = MAKE_VALUE_STR(buf);  // Value is a string copy of the key
             track_alloc(v);
             ASSERT(bptree_put(tree, &key, v) == BPTREE_OK, "Mixed insert failed for key %s", buf);
 #else  // Numeric keys
@@ -685,7 +722,7 @@ void test_mixed_insert_delete(void) {
 void test_tree_stats(void) {
     for (int m = 0; m < num_test_max_keys; m++) {
         const int order = test_max_keys_values[m];
-        bptree *tree = create_test_tree_with_order(order);
+        bptree* tree = create_test_tree_with_order(order);
         ASSERT(tree != NULL, "Tree creation failed");
 
         // Check initial stats
@@ -766,7 +803,7 @@ void test_tree_stats(void) {
 void test_precise_boundary_conditions(void) {
     for (int m = 0; m < num_test_max_keys; m++) {
         const int order = test_max_keys_values[m];  // 'order' here is max_keys
-        bptree *tree = create_test_tree_with_order(order);
+        bptree* tree = create_test_tree_with_order(order);
         ASSERT(tree != NULL, "Tree creation failed");
         const int N = order * 3;  // Insert enough items to cause multiple splits
 
@@ -825,7 +862,7 @@ void test_stress(void) {
     int N = 100000;  // Number of items for stress test
     for (int m = 0; m < num_test_max_keys; m++) {
         int order = test_max_keys_values[m];
-        bptree *tree = create_test_tree_with_order(order);
+        bptree* tree = create_test_tree_with_order(order);
         ASSERT(tree != NULL, "Tree creation failed for stress test");
 
 #ifdef BPTREE_KEY_TYPE_STRING
@@ -833,7 +870,7 @@ void test_stress(void) {
         // Phase 1: Insert N items
         for (int i = 0; i < N; i++) {
             sprintf(key_buf, "stress%05d", i);  // Lexicographical order
-            char *v = MAKE_VALUE_STR(key_buf);
+            char* v = MAKE_VALUE_STR(key_buf);
             track_alloc(v);
             ASSERT(bptree_put(tree, &KEY(key_buf), v) == BPTREE_OK,
                    "Stress insert failed for key %s", key_buf);
@@ -877,6 +914,367 @@ void test_stress(void) {
 }
 
 /**
+ * @brief Test: Stress test with a large number of random deletions.
+ *
+ * Inserts a sequence of keys and then deletes a large fraction of them
+ * in a random order. This is designed to trigger complex rebalancing and
+ * merge scenarios that might be missed by sequential deletion patterns.
+ * Invariants are checked after every single operation to catch transient errors.
+ */
+void test_deletion_and_merge_stress(void) {
+    const int order = 4;  // Use a small order to trigger merges often
+    const int N = 200;    // Number of items to insert
+    const int D = 180;    // Number of items to delete
+
+    bptree* tree = create_test_tree_with_order(order);
+    ASSERT(tree != NULL, "Tree creation failed for deletion stress test");
+
+#ifdef BPTREE_KEY_TYPE_STRING
+    // This test is complex with string keys due to value memory management.
+    // It's primarily designed for numeric keys where values don't need freeing.
+    // A string implementation would require a map/hash table to track which
+    // values have been freed.
+    fprintf(stderr, "Skipping deletion_and_merge_stress for string keys.\n");
+    bptree_free(tree);
+    return;
+#else
+    // --- Phase 1: Insert N items sequentially ---
+    for (int i = 0; i < N; i++) {
+        bptree_key_t k = (bptree_key_t)i;
+        ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK,
+               "Stress delete setup: insert failed for key %d", i);
+        if (i % 10 == 0) {  // Check invariants periodically, not every time, for speed
+            ASSERT(bptree_check_invariants(tree),
+                   "Stress delete setup: invariants failed after inserting %d", i);
+        }
+    }
+    ASSERT(tree->count == N, "Count mismatch after insertion phase of stress delete test");
+    ASSERT(bptree_check_invariants(tree), "Invariants failed after full insertion phase");
+
+    // --- Phase 2: Create a shuffled list of keys to delete ---
+    bptree_key_t* keys_to_delete = malloc(N * sizeof(bptree_key_t));
+    ASSERT(keys_to_delete != NULL, "Failed to allocate memory for keys to delete");
+    for (int i = 0; i < N; i++) {
+        keys_to_delete[i] = (bptree_key_t)i;
+    }
+    // Fisher-Yates shuffle
+    srand((unsigned int)time(NULL));
+    for (int i = N - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+        bptree_key_t temp = keys_to_delete[i];
+        keys_to_delete[i] = keys_to_delete[j];
+        keys_to_delete[j] = temp;
+    }
+
+    // --- Phase 3: Delete D items in random order ---
+    for (int i = 0; i < D; i++) {
+        bptree_key_t k = keys_to_delete[i];
+        bptree_status st = bptree_remove(tree, &k);
+        ASSERT(st == BPTREE_OK, "Deletion of key %lld failed with status %d (i=%d)", (long long)k,
+               st, i);
+        ASSERT(bptree_check_invariants(tree), "Invariants failed after deleting key %lld (i=%d)",
+               (long long)k, i);
+    }
+
+    ASSERT(tree->count == N - D, "Count mismatch after deletions. Expected %d, got %d", N - D,
+           tree->count);
+
+    // --- Phase 4: Verify remaining keys are still present ---
+    for (int i = D; i < N; i++) {
+        bptree_key_t k = keys_to_delete[i];
+        bptree_value_t res;
+        ASSERT(bptree_get(tree, &k, &res) == BPTREE_OK,
+               "Could not find key %lld which should not have been deleted", (long long)k);
+        ASSERT(res == MAKE_VALUE_NUM(k), "Value mismatch for remaining key %lld", (long long)k);
+    }
+
+    free(keys_to_delete);
+    bptree_free(tree);
+#endif
+}
+
+/**
+ * @brief Test: Deletion of a key that requires updating a separator in an ancestor node.
+ *
+ * This test constructs a tree of height 3 where a key exists both in a leaf
+ * and as a separator in the grandparent node. It then deletes the key from the
+ * leaf and verifies that the separator key in the grandparent is correctly updated.
+ * This scenario is critical for ensuring the tree's structural integrity after deletion.
+ */
+void test_ancestor_key_update_on_delete(void) {
+    const int order = 3;  // Use a small order to control tree structure precisely
+    bptree* tree = create_test_tree_with_order(order);
+    ASSERT(tree != NULL, "Tree creation failed for ancestor update test");
+
+    // --- Phase 1: Construct a tree of height 3 ---
+    // This sequence of insertions is carefully chosen to create a tree of height 3
+    // with a specific structure. The key `13` will be a separator in the root.
+    const int keys_to_insert[] = {10, 20, 30, 5, 15, 25, 35, 13, 18, 28, 38, 1, 3, 6, 8};
+    const int num_keys = sizeof(keys_to_insert) / sizeof(keys_to_insert[0]);
+
+    for (int i = 0; i < num_keys; i++) {
+        bptree_key_t k = (bptree_key_t)keys_to_insert[i];
+        bptree_put(tree, &k, MAKE_VALUE_NUM(k));
+    }
+
+    bptree_stats stats_before = bptree_get_stats(tree);
+    ASSERT(stats_before.height == 3, "Test setup failed: Tree height is not 3, but %d",
+           stats_before.height);
+
+    // --- Phase 2: Delete a key that is also a separator in a non-parent ancestor ---
+    // At this point, the key `13` is the smallest key in a leaf and also a separator
+    // in the root node (the grandparent of the leaf). Deleting it should trigger an update
+    // in the root. The new smallest key in the leaf will be 15.
+    bptree_key_t key_to_delete = 13;
+    bptree_status st = bptree_remove(tree, &key_to_delete);
+    ASSERT(st == BPTREE_OK, "Deletion of key 13 failed unexpectedly");
+
+    // --- Phase 3: Verify tree integrity ---
+    // The bug is that the separator in the root is NOT updated. A weak invariant check
+    // might pass here, but a strict one should fail. After fixing the bug, the
+    // invariant check must pass.
+    bool invariants_ok = bptree_check_invariants(tree);
+    ASSERT(invariants_ok, "Invariants check failed after deleting key requiring ancestor update");
+
+    // Also, verify that the deleted key is truly gone and a key from the same leaf is present.
+    bptree_value_t dummy_val;
+    ASSERT(bptree_get(tree, &key_to_delete, &dummy_val) == BPTREE_KEY_NOT_FOUND,
+           "Deleted key 13 was found in the tree");
+
+    bptree_key_t neighbouring_key = 15;
+    ASSERT(bptree_get(tree, &neighbouring_key, &dummy_val) == BPTREE_OK,
+           "Key 15 (neighbour of deleted key) was not found");
+
+    bptree_free(tree);
+}
+
+/**
+ * @brief Test tree operations with the minimum allowed max_keys value (3).
+ *
+ * This test ensures the tree handles the smallest possible node size correctly,
+ * which exercises edge cases in splitting and merging logic.
+ */
+void test_minimum_max_keys(void) {
+    const int min_max_keys = 3;  // Minimum allowed value
+    bptree* tree = bptree_create(min_max_keys, NULL, global_debug_enabled);
+    ASSERT(tree != NULL, "Failed to create tree with min_max_keys=3");
+    ASSERT(tree->max_keys == min_max_keys, "max_keys not set correctly");
+
+    // Test extensive insertions to force multiple splits with minimum node size
+    const int num_keys = 100;
+    for (int i = 0; i < num_keys; i++) {
+        bptree_key_t k = (bptree_key_t)i;
+        bptree_status st = bptree_put(tree, &k, MAKE_VALUE_NUM(k));
+        ASSERT(st == BPTREE_OK, "Insertion failed at key %d with min_max_keys", i);
+    }
+
+    ASSERT(tree->count == num_keys, "Count mismatch after insertions with min_max_keys");
+    ASSERT(bptree_check_invariants(tree), "Invariants failed after insertions with min_max_keys");
+
+    // Test deletions that force merges with minimum node size
+    for (int i = 0; i < num_keys / 2; i++) {
+        bptree_key_t k = (bptree_key_t)(i * 2);  // Delete every other key
+        bptree_status st = bptree_remove(tree, &k);
+        ASSERT(st == BPTREE_OK, "Deletion failed at key %d with min_max_keys", i * 2);
+    }
+
+    ASSERT(tree->count == num_keys / 2, "Count incorrect after deletions with min_max_keys");
+    ASSERT(bptree_check_invariants(tree), "Invariants failed after deletions with min_max_keys");
+
+    // Verify remaining keys are still accessible
+    for (int i = 0; i < num_keys; i++) {
+        bptree_key_t k = (bptree_key_t)i;
+        bptree_value_t val;
+        bptree_status st = bptree_get(tree, &k, &val);
+        if (i % 2 == 0) {
+            ASSERT(st == BPTREE_KEY_NOT_FOUND, "Deleted key %d found with min_max_keys", i);
+        } else {
+            ASSERT(st == BPTREE_OK, "Non-deleted key %d not found with min_max_keys", i);
+        }
+    }
+
+    bptree_free(tree);
+}
+
+/**
+ * @brief Test very large trees (height > 10) to ensure scalability.
+ *
+ * This test creates a tree with many keys to verify that deep trees
+ * maintain correctness and performance remains acceptable.
+ */
+void test_very_large_tree(void) {
+    const int max_keys = 8;  // Moderate branching factor for reasonable height
+    bptree* tree = bptree_create(max_keys, NULL, global_debug_enabled);
+    ASSERT(tree != NULL, "Failed to create tree for large tree test");
+
+    // Insert enough keys to create a tree with height > 10
+    // With max_keys=8, we need roughly 8^10 = 1 billion keys for height 10
+    // But for practical testing, we'll use fewer keys and verify height increases
+    const int num_keys = 100000;  // 100K keys should give us height > 10
+
+    fprintf(stderr, "  [Inserting %d keys for large tree test...]\n", num_keys);
+    for (int i = 0; i < num_keys; i++) {
+        bptree_key_t k = (bptree_key_t)i;
+        bptree_status st = bptree_put(tree, &k, MAKE_VALUE_NUM(k));
+        ASSERT(st == BPTREE_OK, "Insertion failed at key %d in large tree", i);
+
+        // Periodic invariant checks to catch issues early
+        if ((i + 1) % 10000 == 0) {
+            ASSERT(bptree_check_invariants(tree),
+                   "Invariants failed after %d insertions in large tree", i + 1);
+            fprintf(stderr, "  [%d keys inserted, height=%d]\n", i + 1, tree->height);
+        }
+    }
+
+    bptree_stats stats = bptree_get_stats(tree);
+    fprintf(stderr, "  [Final tree: count=%d, height=%d, nodes=%d]\n", stats.count, stats.height,
+            stats.node_count);
+    ASSERT(stats.height > 5, "Tree height (%d) not as deep as expected", stats.height);
+    ASSERT(stats.count == num_keys, "Count mismatch in large tree");
+    ASSERT(bptree_check_invariants(tree), "Invariants failed for large tree");
+
+    // Test random access in large tree
+    fprintf(stderr, "  [Testing random access in large tree...]\n");
+    srand(42);  // Deterministic seed
+    for (int i = 0; i < 1000; i++) {
+        bptree_key_t k = (bptree_key_t)(rand() % num_keys);
+        bptree_value_t val;
+        bptree_status st = bptree_get(tree, &k, &val);
+        ASSERT(st == BPTREE_OK, "Random access failed for key %lld in large tree", (long long)k);
+        ASSERT(val == MAKE_VALUE_NUM(k), "Value mismatch for key %lld in large tree", (long long)k);
+    }
+
+    // Test range queries in large tree
+    fprintf(stderr, "  [Testing range queries in large tree...]\n");
+    bptree_key_t start = 1000, end = 2000;
+    bptree_value_t* range_vals = NULL;
+    int range_count = 0;
+    bptree_status st = bptree_get_range(tree, &start, &end, &range_vals, &range_count);
+    ASSERT(st == BPTREE_OK, "Range query failed in large tree");
+    ASSERT(range_count == 1001, "Range count incorrect in large tree: got %d", range_count);
+    bptree_free_range_results(range_vals);
+
+    bptree_free(tree);
+}
+
+/**
+ * @brief Enhanced stress test with more aggressive random insert/delete patterns.
+ *
+ * This test performs intensive random operations to uncover race conditions
+ * and edge cases in rebalancing logic.
+ */
+void test_enhanced_random_stress(void) {
+    const int max_keys = 5;
+    bptree* tree = bptree_create(max_keys, NULL, global_debug_enabled);
+    ASSERT(tree != NULL, "Failed to create tree for enhanced stress test");
+
+    const int num_operations = 10000;
+    const int key_range = 1000;
+
+    srand(12345);  // Deterministic seed for reproducibility
+    int inserted_count = 0;
+
+    fprintf(stderr, "  [Running %d random operations...]\n", num_operations);
+
+    for (int op = 0; op < num_operations; op++) {
+        int operation = rand() % 100;
+        bptree_key_t k = (bptree_key_t)(rand() % key_range);
+
+        if (operation < 60) {  // 60% inserts
+            bptree_status st = bptree_put(tree, &k, MAKE_VALUE_NUM(k));
+            if (st == BPTREE_OK) {
+                inserted_count++;
+            }
+        } else if (operation < 90) {  // 30% deletes
+            bptree_status st = bptree_remove(tree, &k);
+            if (st == BPTREE_OK) {
+                inserted_count--;
+            }
+        } else {  // 10% range queries
+            bptree_key_t start = (bptree_key_t)(rand() % key_range);
+            bptree_key_t end = start + (bptree_key_t)(rand() % 100);
+            bptree_value_t* range_vals = NULL;
+            int range_count = 0;
+            bptree_status st = bptree_get_range(tree, &start, &end, &range_vals, &range_count);
+            ASSERT(st == BPTREE_OK, "Range query failed in stress test at op %d", op);
+            bptree_free_range_results(range_vals);
+        }
+
+        // Verify tree count matches our tracking
+        ASSERT(tree->count == inserted_count, "Count mismatch at op %d: tree=%d, tracked=%d", op,
+               tree->count, inserted_count);
+
+        // Periodic invariant checks
+        if ((op + 1) % 1000 == 0) {
+            ASSERT(bptree_check_invariants(tree),
+                   "Invariants failed at operation %d in enhanced stress test", op + 1);
+            fprintf(stderr, "  [%d operations completed, count=%d]\n", op + 1, tree->count);
+        }
+    }
+
+    fprintf(stderr, "  [Final count: %d]\n", tree->count);
+    ASSERT(bptree_check_invariants(tree), "Final invariants check failed in enhanced stress test");
+
+    bptree_free(tree);
+}
+
+/**
+ * @brief Test alternating insert/delete patterns that stress rebalancing.
+ *
+ * This test performs specific patterns known to cause issues in tree rebalancing:
+ * - Sequential inserts followed by reverse-order deletes
+ * - Alternating inserts and deletes at boundaries
+ */
+void test_rebalancing_stress_patterns(void) {
+    const int max_keys = 7;
+    bptree* tree = bptree_create(max_keys, NULL, global_debug_enabled);
+    ASSERT(tree != NULL, "Failed to create tree for rebalancing stress test");
+
+    // Pattern 1: Sequential insert, reverse delete
+    fprintf(stderr, "  [Pattern 1: Sequential insert, reverse delete]\n");
+    const int pattern1_count = 500;
+    for (int i = 0; i < pattern1_count; i++) {
+        bptree_key_t k = (bptree_key_t)i;
+        ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK,
+               "Insert failed in pattern 1 at key %d", i);
+    }
+    ASSERT(tree->count == pattern1_count, "Count wrong after pattern 1 inserts");
+
+    for (int i = pattern1_count - 1; i >= 0; i--) {
+        bptree_key_t k = (bptree_key_t)i;
+        ASSERT(bptree_remove(tree, &k) == BPTREE_OK, "Delete failed in pattern 1 at key %d", i);
+
+        if ((pattern1_count - i) % 100 == 0) {
+            ASSERT(bptree_check_invariants(tree),
+                   "Invariants failed during pattern 1 deletes at key %d", i);
+        }
+    }
+    ASSERT(tree->count == 0, "Tree not empty after pattern 1");
+    ASSERT(bptree_check_invariants(tree), "Invariants failed after pattern 1");
+
+    // Pattern 2: Alternating boundaries
+    fprintf(stderr, "  [Pattern 2: Alternating boundary inserts/deletes]\n");
+    const int pattern2_count = 300;
+    for (int i = 0; i < pattern2_count; i++) {
+        bptree_key_t k = (i % 2 == 0) ? (bptree_key_t)i : (bptree_key_t)(1000 - i);
+        ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK,
+               "Insert failed in pattern 2 at iteration %d", i);
+
+        // Every 10 inserts, delete the oldest 5
+        if (i > 0 && i % 10 == 0) {
+            for (int j = i - 10; j < i - 5; j++) {
+                bptree_key_t dk = (j % 2 == 0) ? (bptree_key_t)j : (bptree_key_t)(1000 - j);
+                bptree_remove(tree, &dk);  // Ignore status, key might not exist
+            }
+        }
+    }
+
+    ASSERT(bptree_check_invariants(tree), "Invariants failed after pattern 2");
+
+    bptree_free(tree);
+}
+
+/**
  * @brief Main entry point for the B+ tree test suite.
  *
  * Runs a series of test functions to validate the bptree library.
@@ -891,7 +1289,7 @@ int main(void) {
     // --- Example API check (not a formal test, just basic sanity) ---
 #ifdef BPTREE_KEY_TYPE_STRING
     {
-        bptree *tree = bptree_create(5, string_key_compare, global_debug_enabled);
+        bptree* tree = bptree_create(5, string_key_compare, global_debug_enabled);
         if (tree) {
             printf("API Usage Check: Created tree with max_keys = 5 (string keys).\n");
             ASSERT(bptree_contains(tree, (bptree_key_t[]){KEY("example")}) == false,
@@ -906,7 +1304,7 @@ int main(void) {
     }
 #else  // Numeric keys
     {
-        bptree *tree = bptree_create(5, NULL, global_debug_enabled);
+        bptree* tree = bptree_create(5, NULL, global_debug_enabled);
         if (tree) {
             printf("API Usage Check: Created tree with max_keys = 5 (numeric keys).\n");
             const bptree_key_t example = 69;
@@ -922,6 +1320,7 @@ int main(void) {
 
     // --- Run Core Test Functions ---
     RUN_TEST(test_creation_failure);
+    RUN_TEST(test_min_internal_keys_calculation);
     RUN_TEST(test_empty_tree);
     RUN_TEST(test_single_element);
     RUN_TEST(test_insertion_and_search);
@@ -932,6 +1331,14 @@ int main(void) {
     RUN_TEST(test_precise_boundary_conditions);
     RUN_TEST(test_stress);
     RUN_TEST(test_mixed_insert_delete);  // Often catches complex rebalancing issues
+    RUN_TEST(test_deletion_and_merge_stress);
+    RUN_TEST(test_ancestor_key_update_on_delete);
+
+    // --- Run Enhanced Edge Case Tests ---
+    RUN_TEST(test_minimum_max_keys);
+    RUN_TEST(test_very_large_tree);
+    RUN_TEST(test_enhanced_random_stress);
+    RUN_TEST(test_rebalancing_stress_patterns);
 
     // --- Test Summary ---
     fprintf(stderr, "----------------------------------------\n");

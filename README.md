@@ -24,9 +24,9 @@ A B+ tree implementation in C
 Bptree is a lightweight single-header [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree) implementation written in C.
 It can be thought of as an in-memory ordered map where keys are stored based on the ordering defined by some comparator function,
 and values can be any type of data.
-I created this library primarily to learn about B+ trees.
-It is a fully functional implementation for in-memory storage with a simple API that covers the core operations of a conventional
-B+ tree.
+This library started as a personal project to learn about B+ trees and their internal details.
+It now provides a fully functional implementation for in-memory storage with a simple API covering the core operations of a
+typical B+ tree.
 
 The B+ tree is a variant of the [B-tree](https://en.wikipedia.org/wiki/B-tree) data structure.
 It is a self-balancing n-ary tree (each node in the tree can have at most n children) like B-tree,
@@ -86,7 +86,7 @@ To generate the documentation, use the `make doc` command and then open the `doc
 | `bptree_get_range`          | `bptree_status` | Gets values for keys within `[start, end]` (inclusive) via out-parameters for the results array and count. The caller must free the results array using `bptree_free_range_results`. |
 | `bptree_free_range_results` | `void`          | Frees the array allocated by `bptree_get_range`.                                                                                                                                     |
 | `bptree_get_stats`          | `bptree_stats`  | Returns tree statistics, including key count, height, and node count of the tree.                                                                                                    |
-| `bptree_check_invariants`   | `bool`          | Checks structural correctness of the B+ tree (e.g., key ordering, node fill levels, and leaf depth).                                                                                 
+| `bptree_check_invariants`   | `bool`          | Checks structural correctness of the B+ tree (e.g., key ordering, node fill levels, and leaf depth).  
 
 | Type             | Description                                                                                |
 |:-----------------|:-------------------------------------------------------------------------------------------|

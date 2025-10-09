@@ -10,9 +10,9 @@
  * @version 0.4.1-beta
  */
 
-#define BPTREE_IMPLEMENTATION              // Include implementation of B+ tree
-#define BPTREE_VALUE_TYPE struct record *  // Configure tree to store pointers to records
-#include <assert.h>                        // For assertions
+#define BPTREE_IMPLEMENTATION             // Include implementation of B+ tree
+#define BPTREE_VALUE_TYPE struct record*  // Configure tree to store pointers to records
+#include <assert.h>                       // For assertions
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,7 +47,7 @@ typedef struct record {
  * @param b Pointer to the second key.
  * @return -1 if *a < *b, 0 if *a == *b, 1 if *a > *b.
  */
-static int record_compare(const bptree_key_t *a, const bptree_key_t *b) {
+static int record_compare(const bptree_key_t* a, const bptree_key_t* b) {
     // Assumes BPTREE_NUMERIC_TYPE is defined (default is int64_t)
     return (*a < *b) ? -1 : ((*a > *b) ? 1 : 0);
 }
@@ -60,8 +60,8 @@ static int record_compare(const bptree_key_t *a, const bptree_key_t *b) {
  * @return A pointer to the newly allocated record_t, or NULL on allocation failure.
  * @note The caller is responsible for freeing the returned pointer when done.
  */
-static record_t *create_record(const bptree_key_t id, const char *name) {
-    record_t *rec = malloc(sizeof(record_t));
+static record_t* create_record(const bptree_key_t id, const char* name) {
+    record_t* rec = malloc(sizeof(record_t));
     if (!rec) {
         perror("Failed to allocate memory for record");
         return NULL;
@@ -93,7 +93,7 @@ static void print_key(const bptree_key_t key) {
  * @param status The status enum value returned by a bptree function.
  * @return A constant string representation of the status.
  */
-static const char *status_to_string(const bptree_status status) {
+static const char* status_to_string(const bptree_status status) {
     switch (status) {
         case BPTREE_OK:
             return "OK";
@@ -125,7 +125,7 @@ static const char *status_to_string(const bptree_status status) {
  * @warning This function assumes `bptree_value_t` is `record_t*` and that
  * the pointers stored are valid results from `malloc` or NULL.
  */
-static void cleanup_records_and_tree(bptree *tree) {
+static void cleanup_records_and_tree(bptree* tree) {
     printf("Cleaning up records and tree...\n");
     if (!tree) {
         printf("Tree pointer is NULL. Nothing to clean up.\n");
@@ -141,9 +141,9 @@ static void cleanup_records_and_tree(bptree *tree) {
     if (tree->count > 0) {
         printf("Iterating through leaves to free %d records...\n", tree->count);
         // 1. Find the first leaf node
-        bptree_node *leaf = tree->root;
+        bptree_node* leaf = tree->root;
         while (leaf && !leaf->is_leaf) {
-            bptree_node **children = bptree_node_children(leaf, tree->max_keys);
+            bptree_node** children = bptree_node_children(leaf, tree->max_keys);
             // Descend to the leftmost child
             if (leaf->num_keys >= 0 && children && children[0]) {
                 leaf = children[0];
@@ -163,12 +163,12 @@ static void cleanup_records_and_tree(bptree *tree) {
         } else {
             // 2. Iterate through all leaf nodes using the 'next' pointer
             int freed_count = 0;
-            bptree_node *current_leaf = leaf;
+            bptree_node* current_leaf = leaf;
             while (current_leaf) {
                 assert(current_leaf->is_leaf);  // Should always be leaf here
-                const bptree_value_t *values = bptree_node_values(current_leaf, tree->max_keys);
+                const bptree_value_t* values = bptree_node_values(current_leaf, tree->max_keys);
                 for (int i = 0; i < current_leaf->num_keys; i++) {
-                    record_t *rec_ptr = (record_t *)values[i];  // Cast from bptree_value_t
+                    record_t* rec_ptr = (record_t*)values[i];  // Cast from bptree_value_t
                     if (rec_ptr) {
                         free(rec_ptr);  // Free the actual record_t struct
                         freed_count++;
@@ -219,7 +219,7 @@ static void cleanup_records_and_tree(bptree *tree) {
 int main(void) {
     // Create the B+ tree with max_keys = 4 (Order 5)
     // Store pointers to record_t structs (BPTREE_VALUE_TYPE)
-    bptree *tree = bptree_create(4, record_compare, debug_enabled);
+    bptree* tree = bptree_create(4, record_compare, debug_enabled);
     if (!tree) {
         fprintf(stderr, "Error: failed to create B+ tree\n");
         return EXIT_FAILURE;
@@ -228,21 +228,21 @@ int main(void) {
 
     // Array to hold pointers to allocated records for easier cleanup on error
     // Note: Size needs to be sufficient for all potential allocations before cleanup/removal
-    record_t *allocated_records[20];
+    record_t* allocated_records[20];
     int allocated_count = 0;
     bptree_status status;
     bool error_occurred = false;
 
     // --- Initial Data Insertion ---
     printf("Inserting records...\n");
-    record_t *initial_data[] = {
+    record_t* initial_data[] = {
         create_record(1, "Alice"), create_record(2, "Bob"),   create_record(3, "Charlie"),
         create_record(6, "Frank"), create_record(7, "Grace"), create_record(8, "Heidi"),
         create_record(9, "Ivan"),  create_record(4, "David"), create_record(5, "Eve")};
     const int num_initial = sizeof(initial_data) / sizeof(initial_data[0]);
 
     for (int i = 0; i < num_initial; ++i) {
-        record_t *rec = initial_data[i];
+        record_t* rec = initial_data[i];
         if (!rec) {
             fprintf(stderr, "Memory allocation failed for initial record %d. Aborting.\n", i);
             error_occurred = true;
@@ -289,7 +289,7 @@ int main(void) {
     // --- Test Duplicate Insert ---
     if (!error_occurred) {
         printf("Testing duplicate insert...\n");
-        record_t *dup_rec = create_record(3, "Charlie Duplicate");
+        record_t* dup_rec = create_record(3, "Charlie Duplicate");
         if (!dup_rec) {
             fprintf(stderr, "Failed to allocate duplicate record.\n");
             error_occurred = true;
@@ -326,12 +326,12 @@ int main(void) {
     if (!error_occurred) {
         printf("Retrieving record with key 3...\n");
         const bptree_key_t search_key = 3;
-        record_t *found_rec_ptr = NULL;  // Variable to hold the retrieved pointer
-        status = bptree_get(tree, &search_key, (bptree_value_t *)&found_rec_ptr);
+        record_t* found_rec_ptr = NULL;  // Variable to hold the retrieved pointer
+        status = bptree_get(tree, &search_key, (bptree_value_t*)&found_rec_ptr);
         if (status == BPTREE_OK && found_rec_ptr) {
             printf("Found record: id=");
             print_key(found_rec_ptr->id);
-            printf(", name=%s [Pointer: %p]\n", found_rec_ptr->name, (void *)found_rec_ptr);
+            printf(", name=%s [Pointer: %p]\n", found_rec_ptr->name, (void*)found_rec_ptr);
         } else {
             printf("Record with key ");
             print_key(search_key);
@@ -346,18 +346,18 @@ int main(void) {
         printf("Performing range query for keys in [4, 7]...\n");
         const bptree_key_t low = 4, high = 7;
         int range_count = 0;
-        record_t **range_results = NULL;  // Array of POINTERS to records
+        record_t** range_results = NULL;  // Array of POINTERS to records
         status =
-            bptree_get_range(tree, &low, &high, (bptree_value_t **)&range_results, &range_count);
+            bptree_get_range(tree, &low, &high, (bptree_value_t**)&range_results, &range_count);
         if (status == BPTREE_OK) {
             printf("Range query: count = %d\n", range_count);
             if (range_results) {
                 for (int i = 0; i < range_count; i++) {
-                    record_t *r = range_results[i];  // Get the pointer from the results array
+                    record_t* r = range_results[i];  // Get the pointer from the results array
                     if (r) {
                         printf("  id=");
                         print_key(r->id);
-                        printf(", name=%s [Pointer: %p]\n", r->name, (void *)r);
+                        printf(", name=%s [Pointer: %p]\n", r->name, (void*)r);
                     } else {
                         fprintf(stderr, "Warning: NULL pointer found in range results.\n");
                     }
@@ -365,7 +365,7 @@ int main(void) {
                 // IMPORTANT: Free the array allocated by bptree_get_range,
                 // NOT the records themselves here (they are still potentially in the tree or
                 // tracked separately).
-                bptree_free_range_results((bptree_value_t *)range_results);
+                bptree_free_range_results((bptree_value_t*)range_results);
             } else if (range_count > 0) {
                 fprintf(stderr, "Error: Range count > 0 but results pointer is NULL.\n");
                 error_occurred = true;
@@ -381,10 +381,10 @@ int main(void) {
     if (!error_occurred) {
         printf("Removing record with key 2...\n");
         const bptree_key_t remove_key = 2;
-        record_t *record_to_remove = NULL;  // Pointer to the record we might remove
+        record_t* record_to_remove = NULL;  // Pointer to the record we might remove
 
         // 1. Get the pointer to the record BEFORE removing it from the tree
-        status = bptree_get(tree, &remove_key, (bptree_value_t *)&record_to_remove);
+        status = bptree_get(tree, &remove_key, (bptree_value_t*)&record_to_remove);
 
         if (status == BPTREE_OK && record_to_remove) {
             // 2. Remove the entry (the pointer) from the tree
@@ -397,7 +397,7 @@ int main(void) {
                 printf("Record pointer removed successfully from tree.\n");
                 // 3. Now that it's out of the tree, free the actual record memory
                 printf("Freeing record data for id=%lld [Pointer: %p]\n", (long long)remove_key,
-                       (void *)record_to_remove);
+                       (void*)record_to_remove);
                 // Find it in our tracking array and remove it (makes emergency cleanup simpler)
                 for (int i = 0; i < allocated_count; ++i) {
                     if (allocated_records[i] == record_to_remove) {
@@ -426,8 +426,8 @@ int main(void) {
 
         // Verify removal
         printf("Verifying removal of record with key 2...\n");
-        record_t *found_after_remove = NULL;
-        status = bptree_get(tree, &remove_key, (bptree_value_t *)&found_after_remove);
+        record_t* found_after_remove = NULL;
+        status = bptree_get(tree, &remove_key, (bptree_value_t*)&found_after_remove);
         if (status == BPTREE_KEY_NOT_FOUND) {
             printf("Record with key ");
             print_key(remove_key);
@@ -443,13 +443,13 @@ int main(void) {
     if (!error_occurred) {
         printf("Updating record with key 3 (remove then reinsert)...\n");
         const bptree_key_t update_key = 3;
-        record_t *old_record_ptr = NULL;
+        record_t* old_record_ptr = NULL;
 
         // 1. Get the pointer to the old record
-        status = bptree_get(tree, &update_key, (bptree_value_t *)&old_record_ptr);
+        status = bptree_get(tree, &update_key, (bptree_value_t*)&old_record_ptr);
         if (status == BPTREE_OK && old_record_ptr) {
             printf("Found old record id=3 ('%s') [Pointer: %p]. Removing...\n",
-                   old_record_ptr->name, (void *)old_record_ptr);
+                   old_record_ptr->name, (void*)old_record_ptr);
             // 2. Remove pointer from tree
             status = bptree_remove(tree, &update_key);
             if (status == BPTREE_OK) {
@@ -467,7 +467,7 @@ int main(void) {
 
                 // 4. Create the new record
                 printf("Creating updated record for id=3...\n");
-                record_t *updated_rec = create_record(update_key, "Charlie Updated");
+                record_t* updated_rec = create_record(update_key, "Charlie Updated");
                 if (!updated_rec) {
                     fprintf(stderr, "Failed to allocate updated record for key 3.\n");
                     error_occurred = true;
@@ -514,7 +514,7 @@ int main(void) {
     // --- Test Final Insert ---
     if (!error_occurred) {
         printf("Inserting record with key 10...\n");
-        record_t *new_rec = create_record(10, "Judy");
+        record_t* new_rec = create_record(10, "Judy");
         if (!new_rec) {
             fprintf(stderr, "Failed to allocate record for key 10.\n");
             error_occurred = true;
@@ -546,12 +546,12 @@ int main(void) {
     // --- Final Checks ---
     if (!error_occurred) {
         printf("Retrieving record with key 3 after update...\n");
-        record_t *found_rec_ptr = NULL;
-        status = bptree_get(tree, &((bptree_key_t){3}), (bptree_value_t *)&found_rec_ptr);
+        record_t* found_rec_ptr = NULL;
+        status = bptree_get(tree, &((bptree_key_t){3}), (bptree_value_t*)&found_rec_ptr);
         if (status == BPTREE_OK && found_rec_ptr) {
             printf("Found record: id=");
             print_key(found_rec_ptr->id);
-            printf(", name=%s [Pointer: %p]\n", found_rec_ptr->name, (void *)found_rec_ptr);
+            printf(", name=%s [Pointer: %p]\n", found_rec_ptr->name, (void*)found_rec_ptr);
             // Verify it's the updated one
             assert(strcmp(found_rec_ptr->name, "Charlie Updated") == 0);
         } else {
@@ -562,11 +562,11 @@ int main(void) {
 
         printf("Retrieving record with key 10...\n");
         found_rec_ptr = NULL;
-        status = bptree_get(tree, &((bptree_key_t){10}), (bptree_value_t *)&found_rec_ptr);
+        status = bptree_get(tree, &((bptree_key_t){10}), (bptree_value_t*)&found_rec_ptr);
         if (status == BPTREE_OK && found_rec_ptr) {
             printf("Found record: id=");
             print_key(found_rec_ptr->id);
-            printf(", name=%s [Pointer: %p]\n", found_rec_ptr->name, (void *)found_rec_ptr);
+            printf(", name=%s [Pointer: %p]\n", found_rec_ptr->name, (void*)found_rec_ptr);
             assert(strcmp(found_rec_ptr->name, "Judy") == 0);
         } else {
             printf("Record with key 10 not found (Status: %s).\n", status_to_string(status));

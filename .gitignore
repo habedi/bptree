@@ -145,3 +145,4 @@ perf.data
 *.old
 *.folded
 *.perf
+core.*

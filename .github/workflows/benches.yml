@@ -1,13 +1,16 @@
 name: Run Benchmarks
 
 on:
-  workflow_dispatch:  # Allow manual runs
+  workflow_dispatch:
   push:
     tags:
-      - 'v*'  # Trigger on version tags
+      - 'v*'
+
+permissions:
+  contents: read
 
 jobs:
-  lint:
+  benchmark:
     runs-on: ubuntu-latest
 
     steps:

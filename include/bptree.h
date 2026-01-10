@@ -43,7 +43,7 @@
  *   - This implementation is NOT thread-safe. Caller must provide external
  *     synchronization (e.g., mutexes) for concurrent access.
  *
- * @version 0.4.1-beta
+ * @version 0.4.3
  * @author
  *   "Hassan Abedi <hassan.abedi.t+bptree@gmail.com>"
  * @copyright MIT License
@@ -546,10 +546,18 @@ static bool bptree_check_invariants_node(bptree_node* node, const bptree* tree, 
                 const bptree_key_t max_in_child0 =
                     bptree_find_largest_key(children[0], tree->max_keys);
                 if (tree->compare(&max_in_child0, &keys[0]) >= 0) {
+#ifdef BPTREE_KEY_TYPE_STRING
+                    bptree_debug_print(tree->enable_debug,
+                                       "Invariant Fail: max(child[0]) >= key[0] in node %p -- "
+                                       "MaxChild=%.*s Key=%.*s\n",
+                                       (void*)node, (int)BPTREE_KEY_SIZE, max_in_child0.data,
+                                       (int)BPTREE_KEY_SIZE, keys[0].data);
+#else
                     bptree_debug_print(tree->enable_debug,
                                        "Invariant Fail: max(child[0]) >= key[0] in node %p -- "
                                        "MaxChild=%lld Key=%lld\n",
                                        (void*)node, (long long)max_in_child0, (long long)keys[0]);
+#endif
                     return false;
                 }
             }

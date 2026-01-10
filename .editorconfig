@@ -1,4 +1,4 @@
-# EditorConfig is awesome: https://EditorConfig.org
+# https://EditorConfig.org
 
 root = true
 
@@ -15,7 +15,7 @@ max_line_length = 100
 
 [*.md]
 max_line_length = 130
-trim_trailing_whitespace = false # Don't remove trailing whitespace in Markdown files
+trim_trailing_whitespace = false
 
 [*.{yml,yaml}]
 indent_size = 2

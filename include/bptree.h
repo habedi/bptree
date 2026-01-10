@@ -43,7 +43,7 @@
  *   - This implementation is NOT thread-safe. Caller must provide external
  *     synchronization (e.g., mutexes) for concurrent access.
  *
- * @version 0.4.1-beta
+ * @version 0.4.3
  * @author
  *   "Hassan Abedi <hassan.abedi.t+bptree@gmail.com>"
  * @copyright MIT License

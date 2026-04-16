@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
     srand(seed);
 
     bptree* tree = bptree_create(max_keys, NULL, false);
-    
+
     bool in_tree[MAX_ITEMS] = {0};
     int count = 0;
 
@@ -84,11 +84,11 @@ int main(int argc, char** argv) {
             int start_val = rand() % MAX_ITEMS;
             int end_val = start_val + rand() % 100;
             if (end_val >= MAX_ITEMS) end_val = MAX_ITEMS - 1;
-            
+
             bptree_key_t start_key, end_key;
             make_key(&start_key, start_val);
             make_key(&end_key, end_val);
-            
+
             bptree_value_t* results = NULL;
             int n_results = 0;
             bptree_status status = bptree_get_range(tree, &start_key, &end_key, &results, &n_results);
@@ -96,12 +96,12 @@ int main(int argc, char** argv) {
                 printf("Range query failed for [%d, %d] with status %d\n", start_val, end_val, status);
                 exit(1);
             }
-            
+
             int expected_count = 0;
             for (int k = start_val; k <= end_val; k++) {
                 if (in_tree[k]) expected_count++;
             }
-            
+
             if (n_results != expected_count) {
                 printf("Range query count mismatch for [%d, %d]. Got %d, Expected %d\n", start_val, end_val, n_results, expected_count);
                 exit(1);
@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
             printf("Invariant check failed after operation %d\n", i);
             exit(1);
         }
-        
+
         if (tree->count != count) {
              printf("Count mismatch! Tree: %d, Expected: %d\n", tree->count, count);
              exit(1);

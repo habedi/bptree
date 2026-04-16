@@ -3,6 +3,8 @@ name: Run Test
 on:
   workflow_dispatch:
   push:
+    branches:
+      - develop
     tags:
       - 'v*'
   pull_request:
@@ -11,8 +13,9 @@ on:
     paths-ignore:
       - '**.md'
 
-permissions:
-  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:

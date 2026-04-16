@@ -3,6 +3,8 @@ name: Run Linter Checks
 on:
   workflow_dispatch:
   push:
+    branches:
+      - develop
     tags:
       - 'v*'
   pull_request:
@@ -10,6 +12,10 @@ on:
       - main
     paths-ignore:
       - '**.md'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

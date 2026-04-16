@@ -3,11 +3,14 @@ name: Run Benchmarks
 on:
   workflow_dispatch:
   push:
+    branches:
+      - develop
     tags:
       - 'v*'
 
-permissions:
-  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   benchmark:

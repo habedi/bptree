@@ -85,12 +85,27 @@ To generate the documentation, use the `make doc` command and then open the `doc
 | `bptree_get_range`          | `bptree_status` | Gets values for keys within `[start, end]` (inclusive) via out-parameters for the results array and count. The caller must free the results array using `bptree_free_range_results`. |
 | `bptree_free_range_results` | `void`          | Frees the array allocated by `bptree_get_range`.                                                                                                                                     |
 | `bptree_get_stats`          | `bptree_stats`  | Returns tree statistics, including key count, height, and node count of the tree.                                                                                                    |
-| `bptree_check_invariants`   | `bool`          | Checks structural correctness of the B+ tree (e.g., key ordering, node fill levels, and leaf depth).  
+| `bptree_check_invariants`   | `bool`          | Checks structural correctness of the B+ tree (e.g., key ordering, node fill levels, and leaf depth).                                                                                 |
+
+##### Iterator Functions
+
+| Function                    | Return Type     | Description                                                                                                  |
+|:----------------------------|:----------------|:-------------------------------------------------------------------------------------------------------------|
+| `bptree_iter_begin`         | `bptree_iter`   | Returns an iterator to the first (smallest-key) element. Invalid if the tree is empty.                       |
+| `bptree_iter_valid`         | `bool`          | Checks whether an iterator points to a valid element (not past-end).                                         |
+| `bptree_iter_next`          | `void`          | Advances the iterator to the next element in key order.                                                      |
+| `bptree_iter_key`           | `bptree_key_t`  | Returns the key at the current iterator position.                                                            |
+| `bptree_iter_value`         | `bptree_value_t`| Returns the value at the current iterator position.                                                          |
+| `bptree_iter_equal`         | `bool`          | Checks whether two iterators point to the same position. Two invalid iterators are considered equal.         |
+| `bptree_iter_find`          | `bptree_iter`   | Returns an iterator to the element with the given key, or an invalid iterator if the key is not found.       |
+| `bptree_iter_lower_bound`   | `bptree_iter`   | Returns an iterator to the first element with a key >= the given key.                                        |
+| `bptree_iter_upper_bound`   | `bptree_iter`   | Returns an iterator to the first element with a key > the given key.                                         |
 
 | Type             | Description                                                                                |
 |:-----------------|:-------------------------------------------------------------------------------------------|
 | `bptree`         | The main B+ tree data structure.                                                           |
 | `bptree_stats`   | The data type used for tree statistics (including key count, tree height, and node count). |
+| `bptree_iter`    | Forward iterator for traversing the tree in key order.                                     |
 | `bptree_key_t`   | The data type used for keys (configurable; default: `int64_t`).                            |
 | `bptree_value_t` | The data type used for values (configurable; default: `void *`).                           |
 | `bptree_status`  | Enum returned by most API functions showing success or failure (types) of operations.      |

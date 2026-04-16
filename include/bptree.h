@@ -156,6 +156,20 @@ typedef struct bptree_stats {
     int node_count; /**< Total number of nodes in the tree */
 } bptree_stats;
 
+/**
+ * @brief Forward iterator for traversing the B+ tree in key order.
+ *
+ * Iterators walk the leaf-level linked list from left to right.
+ * An iterator is invalid (past-end) when its node pointer is NULL.
+ *
+ * @warning Modifying the tree (insert/remove) invalidates all live iterators.
+ */
+typedef struct bptree_iter {
+    const bptree* tree; /**< Back-pointer to the tree (for max_keys and compare) */
+    bptree_node* node;  /**< Current leaf node, or NULL for past-end */
+    int index;          /**< Position within the current leaf */
+} bptree_iter;
+
 /*------------------------------------------------------------------------------
  * Public API
  *----------------------------------------------------------------------------*/
@@ -278,6 +292,91 @@ BPTREE_API bool bptree_check_invariants(const bptree* tree);
  * @return True if found, false otherwise.
  */
 BPTREE_API bool bptree_contains(const bptree* tree, const bptree_key_t* key);
+
+/*------------------------------------------------------------------------------
+ * Iterator API
+ *----------------------------------------------------------------------------*/
+
+/**
+ * @brief Returns an iterator to the first (smallest) element.
+ *
+ * @param tree Pointer to the B+ tree.
+ * @return Iterator positioned at the first element, or an invalid iterator if the tree is empty.
+ */
+BPTREE_API bptree_iter bptree_iter_begin(const bptree* tree);
+
+/**
+ * @brief Checks whether an iterator is valid (not past-end).
+ *
+ * @param it Pointer to the iterator.
+ * @return True if the iterator points to a valid element.
+ */
+BPTREE_API bool bptree_iter_valid(const bptree_iter* it);
+
+/**
+ * @brief Advances the iterator to the next element in key order.
+ *
+ * If the iterator is already past-end, this is a no-op.
+ *
+ * @param it Pointer to the iterator to advance.
+ */
+BPTREE_API void bptree_iter_next(bptree_iter* it);
+
+/**
+ * @brief Returns the key at the current iterator position.
+ *
+ * @pre The iterator must be valid.
+ * @param it Pointer to the iterator.
+ * @return The key at the current position.
+ */
+BPTREE_API bptree_key_t bptree_iter_key(const bptree_iter* it);
+
+/**
+ * @brief Returns the value at the current iterator position.
+ *
+ * @pre The iterator must be valid.
+ * @param it Pointer to the iterator.
+ * @return The value at the current position.
+ */
+BPTREE_API bptree_value_t bptree_iter_value(const bptree_iter* it);
+
+/**
+ * @brief Checks whether two iterators point to the same position.
+ *
+ * Two invalid (past-end) iterators are considered equal.
+ *
+ * @param a Pointer to the first iterator.
+ * @param b Pointer to the second iterator.
+ * @return True if both iterators point to the same element or are both invalid.
+ */
+BPTREE_API bool bptree_iter_equal(const bptree_iter* a, const bptree_iter* b);
+
+/**
+ * @brief Returns an iterator to the element with the given key.
+ *
+ * @param tree Pointer to the B+ tree.
+ * @param key Pointer to the key to search for.
+ * @return Iterator positioned at the element, or an invalid iterator if not found.
+ */
+BPTREE_API bptree_iter bptree_iter_find(const bptree* tree, const bptree_key_t* key);
+
+/**
+ * @brief Returns an iterator to the first element with a key >= the given key.
+ *
+ * @param tree Pointer to the B+ tree.
+ * @param key Pointer to the lower bound key.
+ * @return Iterator positioned at the first element >= key, or invalid if none exists.
+ */
+BPTREE_API bptree_iter bptree_iter_lower_bound(const bptree* tree, const bptree_key_t* key);
+
+/**
+ * @brief Returns an iterator to the first element with a key > the given key.
+ *
+ * @param tree Pointer to the B+ tree.
+ * @param key Pointer to the upper bound key.
+ * @return Iterator positioned at the first element > key, or invalid if none exists.
+ */
+BPTREE_API bptree_iter bptree_iter_upper_bound(const bptree* tree, const bptree_key_t* key);
 
 #ifdef BPTREE_IMPLEMENTATION
 
@@ -1456,6 +1555,115 @@ BPTREE_API void bptree_free(bptree* tree) {
         bptree_free_node(tree->root, tree);
     }
     free(tree);
+}
+
+/*==============================================================================
+ * Iterator Implementation
+ *============================================================================*/
+
+/**
+ * @brief Walk from the root to the leftmost leaf node.
+ */
+static bptree_node* bptree_leftmost_leaf(const bptree* tree) {
+    bptree_node* node = tree->root;
+    while (node && !node->is_leaf) {
+        node = bptree_node_children(node, tree->max_keys)[0];
+    }
+    return node;
+}
+
+/**
+ * @brief Navigate from the root to the leaf that would contain @p key.
+ */
+static bptree_node* bptree_find_leaf(const bptree* tree, const bptree_key_t* key) {
+    bptree_node* node = tree->root;
+    while (node && !node->is_leaf) {
+        const int pos = bptree_node_search(tree, node, key);
+        node = bptree_node_children(node, tree->max_keys)[pos];
+    }
+    return node;
+}
+
+BPTREE_API bptree_iter bptree_iter_begin(const bptree* tree) {
+    bptree_iter it = {NULL, NULL, 0};
+    if (!tree || !tree->root || tree->count == 0) return it;
+    it.tree = tree;
+    it.node = bptree_leftmost_leaf(tree);
+    it.index = 0;
+    return it;
+}
+
+BPTREE_API bool bptree_iter_valid(const bptree_iter* it) {
+    return it != NULL && it->node != NULL && it->index < it->node->num_keys;
+}
+
+BPTREE_API void bptree_iter_next(bptree_iter* it) {
+    if (!it || !it->node) return;
+    it->index++;
+    if (it->index >= it->node->num_keys) {
+        it->node = it->node->next;
+        it->index = 0;
+    }
+}
+
+BPTREE_API bptree_key_t bptree_iter_key(const bptree_iter* it) {
+    assert(it && it->node && it->index < it->node->num_keys);
+    return bptree_node_keys(it->node)[it->index];
+}
+
+BPTREE_API bptree_value_t bptree_iter_value(const bptree_iter* it) {
+    assert(it && it->node && it->index < it->node->num_keys);
+    return bptree_node_values(it->node, it->tree->max_keys)[it->index];
+}
+
+BPTREE_API bool bptree_iter_equal(const bptree_iter* a, const bptree_iter* b) {
+    if (!a || !b) return a == b;
+    return a->node == b->node && a->index == b->index;
+}
+
+BPTREE_API bptree_iter bptree_iter_find(const bptree* tree, const bptree_key_t* key) {
+    bptree_iter it = {NULL, NULL, 0};
+    if (!tree || !tree->root || !key || tree->count == 0) return it;
+    bptree_node* leaf = bptree_find_leaf(tree, key);
+    if (!leaf) return it;
+    const int pos = bptree_node_search(tree, leaf, key);
+    const bptree_key_t* keys = bptree_node_keys(leaf);
+    if (pos < leaf->num_keys && tree->compare(key, &keys[pos]) == 0) {
+        it.tree = tree;
+        it.node = leaf;
+        it.index = pos;
+    }
+    return it;
+}
+
+BPTREE_API bptree_iter bptree_iter_lower_bound(const bptree* tree, const bptree_key_t* key) {
+    bptree_iter it = {NULL, NULL, 0};
+    if (!tree || !tree->root || !key || tree->count == 0) return it;
+    bptree_node* leaf = bptree_find_leaf(tree, key);
+    if (!leaf) return it;
+    int pos = bptree_node_search(tree, leaf, key);
+    // If pos is past the end of this leaf, the answer is in the next leaf.
+    if (pos >= leaf->num_keys) {
+        leaf = leaf->next;
+        pos = 0;
+    }
+    if (leaf && pos < leaf->num_keys) {
+        it.tree = tree;
+        it.node = leaf;
+        it.index = pos;
+    }
+    return it;
+}
+
+BPTREE_API bptree_iter bptree_iter_upper_bound(const bptree* tree, const bptree_key_t* key) {
+    bptree_iter it = bptree_iter_lower_bound(tree, key);
+    if (!bptree_iter_valid(&it)) return it;
+    // lower_bound gives first key >= target. If it equals the target, advance past it.
+    const bptree_key_t* keys = bptree_node_keys(it.node);
+    if (tree->compare(key, &keys[it.index]) == 0) {
+        bptree_iter_next(&it);
+    }
+    return it;
 }
 
 #endif

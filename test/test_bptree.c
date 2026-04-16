@@ -1391,6 +1391,203 @@ void test_delete_all_reverse(void) {
     }
 }
 
+/**
+ * @brief Test: Full iterator traversal.
+ *
+ * Inserts N keys and verifies that iterating from the beginning to end visits every
+ * key exactly once in sorted order.
+ */
+void test_iter_full_traversal(void) {
+    const int orders[] = {3, 4, 7, 32};
+    const int num_orders = sizeof(orders) / sizeof(orders[0]);
+
+    for (int o = 0; o < num_orders; o++) {
+        const int order = orders[o];
+        bptree* tree = bptree_create(order, NULL, global_debug_enabled);
+        ASSERT(tree != NULL, "Tree creation failed");
+
+        const int N = 200;
+        for (int i = 0; i < N; i++) {
+            bptree_key_t k = (bptree_key_t)i;
+            bptree_put(tree, &k, MAKE_VALUE_NUM(k));
+        }
+
+        // Forward iterate and verify sorted order and count.
+        int count = 0;
+        bptree_key_t prev = -1;
+        for (bptree_iter it = bptree_iter_begin(tree); bptree_iter_valid(&it);
+             bptree_iter_next(&it)) {
+            bptree_key_t k = bptree_iter_key(&it);
+            bptree_value_t v = bptree_iter_value(&it);
+            if (count > 0) {
+                ASSERT(k > prev, "Iterator keys not sorted: %lld after %lld (order %d)",
+                       (long long)k, (long long)prev, order);
+            }
+            ASSERT(v == MAKE_VALUE_NUM(k), "Iterator value mismatch for key %lld", (long long)k);
+            prev = k;
+            count++;
+        }
+        ASSERT(count == N, "Iterator visited %d keys, expected %d (order %d)", count, N, order);
+
+        bptree_free(tree);
+    }
+}
+
+/**
+ * @brief Test: Iterator on empty tree.
+ *
+ * Verifies that begin() returns an invalid iterator on an empty tree.
+ */
+void test_iter_empty_tree(void) {
+    bptree* tree = bptree_create(5, NULL, global_debug_enabled);
+    ASSERT(tree != NULL, "Tree creation failed");
+
+    bptree_iter it = bptree_iter_begin(tree);
+    ASSERT(!bptree_iter_valid(&it), "begin() on empty tree should be invalid");
+
+    bptree_key_t k = 42;
+    it = bptree_iter_find(tree, &k);
+    ASSERT(!bptree_iter_valid(&it), "find() on empty tree should be invalid");
+
+    it = bptree_iter_lower_bound(tree, &k);
+    ASSERT(!bptree_iter_valid(&it), "lower_bound() on empty tree should be invalid");
+
+    it = bptree_iter_upper_bound(tree, &k);
+    ASSERT(!bptree_iter_valid(&it), "upper_bound() on empty tree should be invalid");
+
+    bptree_free(tree);
+}
+
+/**
+ * @brief Test: Iterator find, lower_bound, and upper_bound.
+ *
+ * Inserts keys {10, 20, 30, 40, 50} and tests all three search operations
+ * for existing keys, missing keys, and boundary conditions.
+ */
+void test_iter_search(void) {
+    bptree* tree = bptree_create(3, NULL, global_debug_enabled);
+    ASSERT(tree != NULL, "Tree creation failed");
+
+    const bptree_key_t keys[] = {10, 20, 30, 40, 50};
+    const int N = sizeof(keys) / sizeof(keys[0]);
+    for (int i = 0; i < N; i++) {
+        bptree_put(tree, &keys[i], MAKE_VALUE_NUM(keys[i]));
+    }
+
+    // --- find ---
+    for (int i = 0; i < N; i++) {
+        bptree_iter it = bptree_iter_find(tree, &keys[i]);
+        ASSERT(bptree_iter_valid(&it), "find(%lld) should succeed", (long long)keys[i]);
+        ASSERT(bptree_iter_key(&it) == keys[i], "find(%lld) key mismatch", (long long)keys[i]);
+    }
+    bptree_key_t missing = 25;
+    bptree_iter it = bptree_iter_find(tree, &missing);
+    ASSERT(!bptree_iter_valid(&it), "find(25) should fail for missing key");
+
+    // --- lower_bound ---
+    // lower_bound(25) should give 30 (first key >= 25).
+    it = bptree_iter_lower_bound(tree, &missing);
+    ASSERT(bptree_iter_valid(&it), "lower_bound(25) should be valid");
+    ASSERT(bptree_iter_key(&it) == 30, "lower_bound(25) should be 30, got %lld",
+           (long long)bptree_iter_key(&it));
+
+    // lower_bound(30) should give 30 (exact match).
+    bptree_key_t exact = 30;
+    it = bptree_iter_lower_bound(tree, &exact);
+    ASSERT(bptree_iter_valid(&it) && bptree_iter_key(&it) == 30, "lower_bound(30) should be 30");
+
+    // lower_bound(5) should give 10 (first element).
+    bptree_key_t below_all = 5;
+    it = bptree_iter_lower_bound(tree, &below_all);
+    ASSERT(bptree_iter_valid(&it) && bptree_iter_key(&it) == 10, "lower_bound(5) should be 10");
+
+    // lower_bound(51) should be invalid (past all elements).
+    bptree_key_t above_all = 51;
+    it = bptree_iter_lower_bound(tree, &above_all);
+    ASSERT(!bptree_iter_valid(&it), "lower_bound(51) should be invalid");
+
+    // --- upper_bound ---
+    // upper_bound(30) should give 40 (first key > 30).
+    it = bptree_iter_upper_bound(tree, &exact);
+    ASSERT(bptree_iter_valid(&it) && bptree_iter_key(&it) == 40,
+           "upper_bound(30) should be 40, got %lld",
+           bptree_iter_valid(&it) ? (long long)bptree_iter_key(&it) : -1LL);
+
+    // upper_bound(25) should give 30 (same as lower_bound for non-existing key).
+    it = bptree_iter_upper_bound(tree, &missing);
+    ASSERT(bptree_iter_valid(&it) && bptree_iter_key(&it) == 30, "upper_bound(25) should be 30");
+
+    // upper_bound(50) should be invalid (nothing > 50).
+    bptree_key_t last = 50;
+    it = bptree_iter_upper_bound(tree, &last);
+    ASSERT(!bptree_iter_valid(&it), "upper_bound(50) should be invalid");
+
+    bptree_free(tree);
+}
+
+/**
+ * @brief Test: Iterator-based range scan using lower_bound and upper_bound.
+ *
+ * Demonstrates the idiomatic pattern for scanning a [lo, hi] range,
+ * equivalent to what bptree_get_range does internally.
+ */
+void test_iter_range_scan(void) {
+    bptree* tree = bptree_create(4, NULL, global_debug_enabled);
+    ASSERT(tree != NULL, "Tree creation failed");
+
+    const int N = 100;
+    for (int i = 0; i < N; i++) {
+        bptree_key_t k = (bptree_key_t)(i * 3);  // 0, 3, 6, ..., 297
+        bptree_put(tree, &k, MAKE_VALUE_NUM(k));
+    }
+
+    // Scan the range [10, 50] using iterators.
+    bptree_key_t lo = 10, hi = 50;
+    bptree_iter end_it = bptree_iter_upper_bound(tree, &hi);
+    int count = 0;
+    for (bptree_iter it = bptree_iter_lower_bound(tree, &lo);
+         bptree_iter_valid(&it) && !bptree_iter_equal(&it, &end_it); bptree_iter_next(&it)) {
+        bptree_key_t k = bptree_iter_key(&it);
+        ASSERT(k >= lo && k <= hi, "Iterator key %lld outside range [%lld, %lld]", (long long)k,
+               (long long)lo, (long long)hi);
+        count++;
+    }
+    // Keys in [10, 50] that are multiples of 3: 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45, 48
+    ASSERT(count == 13, "Range [10, 50] should have 13 keys (multiples of 3), got %d", count);
+
+    bptree_free(tree);
+}
+
+/**
+ * @brief Test: Iterator equality.
+ *
+ * Verifies that bptree_iter_equal works for same-position, different-position,
+ * and invalid iterators.
+ */
+void test_iter_equal(void) {
+    bptree* tree = bptree_create(5, NULL, global_debug_enabled);
+    ASSERT(tree != NULL, "Tree creation failed");
+
+    for (int i = 0; i < 20; i++) {
+        bptree_key_t k = (bptree_key_t)i;
+        bptree_put(tree, &k, MAKE_VALUE_NUM(k));
+    }
+
+    bptree_iter a = bptree_iter_begin(tree);
+    bptree_iter b = bptree_iter_begin(tree);
+    ASSERT(bptree_iter_equal(&a, &b), "Two begin() iterators should be equal");
+
+    bptree_iter_next(&b);
+    ASSERT(!bptree_iter_equal(&a, &b), "begin() and begin()+1 should not be equal");
+
+    // Two invalid iterators should be equal.
+    bptree_iter inv_a = {NULL, NULL, 0};
+    bptree_iter inv_b = {NULL, NULL, 0};
+    ASSERT(bptree_iter_equal(&inv_a, &inv_b), "Two invalid iterators should be equal");
+
+    bptree_free(tree);
+}
+
 #endif  // !BPTREE_KEY_TYPE_STRING
 
 /**
@@ -1429,6 +1626,46 @@ void test_api_argument_validation(void) {
            "Range query should reject start > end");
 
     bptree_free(tree);
+}
+
+/**
+ * @brief Test: Basic iterator traversal (cross-mode, works with both key types).
+ *
+ * Inserts a small set of elements, iterates with begin/next/valid, and verifies
+ * the count matches tree->count.
+ */
+void test_iter_basic(void) {
+    for (int m = 0; m < num_test_max_keys; m++) {
+        const int order = test_max_keys_values[m];
+        bptree* tree = create_test_tree_with_order(order);
+        ASSERT(tree != NULL, "Tree creation failed");
+
+        const int N = 50;
+#ifdef BPTREE_KEY_TYPE_STRING
+        char key_buf[32];
+        for (int i = 0; i < N; i++) {
+            sprintf(key_buf, "iter%04d", i);
+            bptree_key_t k = KEY(key_buf);
+            ASSERT(bptree_put(tree, &k, NULL) == BPTREE_OK, "Insert failed for key %s", key_buf);
+        }
+#else
+        for (int i = 0; i < N; i++) {
+            bptree_key_t k = (bptree_key_t)i;
+            ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK,
+                   "Insert failed for key %lld", (long long)k);
+        }
+#endif
+
+        // Count elements via iterator.
+        int count = 0;
+        for (bptree_iter it = bptree_iter_begin(tree); bptree_iter_valid(&it);
+             bptree_iter_next(&it)) {
+            count++;
+        }
+        ASSERT(count == N, "Iterator count %d != expected %d (order %d)", count, N, order);
+
+        bptree_free(tree);
+    }
 }
 
 /**
@@ -1502,10 +1739,18 @@ int main(void) {
     RUN_TEST(test_max_keys_upper_bound);
     RUN_TEST(test_delete_all_keys);
     RUN_TEST(test_delete_all_reverse);
+
+    // --- Iterator tests (numeric) ---
+    RUN_TEST(test_iter_full_traversal);
+    RUN_TEST(test_iter_empty_tree);
+    RUN_TEST(test_iter_search);
+    RUN_TEST(test_iter_range_scan);
+    RUN_TEST(test_iter_equal);
 #endif
 
-    // Cross-mode regression tests
+    // Cross-mode tests
     RUN_TEST(test_api_argument_validation);
+    RUN_TEST(test_iter_basic);
 
     // --- Test Summary ---
     fprintf(stderr, "----------------------------------------\n");

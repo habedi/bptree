@@ -7,7 +7,7 @@
  * removing records, and updating records using the bptree library.
  * It uses numeric keys and stores pointers to a custom `record_t` struct as values.
  *
- * @version 0.4.3
+ * @version 0.5.0
  */
 
 #define BPTREE_IMPLEMENTATION             // Include implementation of B+ tree

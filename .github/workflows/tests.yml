@@ -3,6 +3,8 @@ name: Run Test
 on:
   workflow_dispatch:
   push:
+    branches:
+      - develop
     tags:
       - 'v*'
   pull_request:
@@ -11,27 +13,28 @@ on:
     paths-ignore:
       - '**.md'
 
-permissions:
-  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y make
           make install-deps
 
-      - name: Run Tests and Generate Coverage Report
+      - name: Run tests and generate coverage report
         run: make coverage
 
-      - name: Upload Coverage Reports to Codecov
+      - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

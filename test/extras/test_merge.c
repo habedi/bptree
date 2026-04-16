@@ -17,13 +17,13 @@ void print_tree_structure(bptree_node* node, int depth, int max_keys) {
         printf(" %lld", (long long)keys[i]);
     }
     printf(" ]\n");
-    
+
     if (!node->is_leaf) {
         size_t offset = (size_t)(max_keys + 1) * sizeof(bptree_key_t);
         size_t req_align = (sizeof(bptree_value_t) > sizeof(bptree_node*) ? sizeof(bptree_value_t) : sizeof(bptree_node*));
         size_t pad = (req_align - (offset % req_align)) % req_align;
         bptree_node** children = (bptree_node**)(node->data + offset + pad);
-        
+
         for (int i = 0; i <= node->num_keys; i++) {
             print_tree_structure(children[i], depth + 1, max_keys);
         }
@@ -40,7 +40,7 @@ int main() {
     bptree_put(tree, &k2, (bptree_value_t)20);
     bptree_put(tree, &k3, (bptree_value_t)30);
     bptree_put(tree, &k4, (bptree_value_t)40);
-    
+
     print_tree_structure(tree->root, 0, max_keys);
     // Expected: Root[30] -> Child0[10, 20], Child1[30, 40]
 
@@ -48,16 +48,16 @@ int main() {
     bptree_remove(tree, &k1);
     print_tree_structure(tree->root, 0, max_keys);
     // Expected: Root[20, 30, 40] (Height reduced)
-    
-    if (tree->height != 1) {
-        printf("FAIL: Height should be 1, got %d\n", tree->height);
+
+    if (bptree_height(tree) != 1) {
+        printf("FAIL: Height should be 1, got %d\n", bptree_height(tree));
     }
-    if (tree->count != 3) {
-        printf("FAIL: Count should be 3, got %d\n", tree->count);
+    if (bptree_count(tree) != 3) {
+        printf("FAIL: Count should be 3, got %d\n", bptree_count(tree));
     }
 
     bptree_free(tree);
-    
+
     printf("\nTest 2: Merge Left\n");
     tree = bptree_create(max_keys, compare_ints, true);
     bptree_put(tree, &k1, (bptree_value_t)10);
@@ -68,7 +68,7 @@ int main() {
     bptree_put(tree, &k6, (bptree_value_t)60);
     // Root[30, 50] -> [10, 20], [30, 40], [50, 60]
     print_tree_structure(tree->root, 0, max_keys);
-    
+
     printf("Deleting 60 (Trigger Merge Left)...\n");
     bptree_remove(tree, &k6);
     // [50, 60] -> [50]. Underflow.
@@ -78,7 +78,7 @@ int main() {
     // Root loses 50.
     // Root[30] -> [10, 20], [30, 40, 50].
     print_tree_structure(tree->root, 0, max_keys);
-    
+
     if (!bptree_check_invariants(tree)) {
         printf("FAIL: Invariants\n");
     }

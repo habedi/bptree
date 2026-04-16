@@ -3,6 +3,8 @@ name: Run Linter Checks
 on:
   workflow_dispatch:
   push:
+    branches:
+      - develop
     tags:
       - 'v*'
   pull_request:
@@ -10,6 +12,10 @@ on:
       - main
     paths-ignore:
       - '**.md'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -19,14 +25,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y make
           make install-deps
 
-      - name: Run Linters
+      - name: Run linters
         run: make lint

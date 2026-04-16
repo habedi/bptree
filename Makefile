@@ -1,5 +1,6 @@
 # General Variables
-SHELL := bash
+SHELL         := /usr/bin/env bash
+.SHELLFLAGS   := -eu -o pipefail -c
 
 # Build configuration
 CC ?= clang # or gcc
@@ -10,8 +11,26 @@ BUILD_TYPE ?= debug
 BIN_DIR    := bin
 TEST_DIR   := test
 INC_DIR    := include
-DOC_DIR    := doc
+DOC_DIR    := docs
 ASSET_DIR := assets
+
+# ################################################################################
+# # Zig Build System Configuration
+# ################################################################################
+ZIG_LOCAL     := $(HOME)/.local/share/zig/0.16.0/zig
+ZIG           ?= $(shell test -x $(ZIG_LOCAL) && echo $(ZIG_LOCAL) || which zig 2>/dev/null || echo "")
+ZIG_OPTIMIZE  ?= Debug
+ZIG_BUILD_OPTS ?= -Doptimize=$(ZIG_OPTIMIZE)
+JOBS          ?= $(shell nproc 2>/dev/null || echo 2)
+
+# Helper macro to guarantee the Zig compiler exists before running a target
+check_zig = \
+	@if [ -z "$(ZIG)" ] || [ ! -x "$(ZIG)" ]; then \
+	  echo "ERROR: Zig compiler not found."; \
+	  echo "       Install Zig 0.16.0 and/or set ZIG=/path/to/zig."; \
+	  echo "       See: https://ziglang.org/download/"; \
+	  exit 1; \
+	fi
 
 # Flags
 CFLAGS_BASE := -Wall -Wextra -pedantic -std=c11 -I$(INC_DIR)
@@ -63,7 +82,7 @@ $(BIN_DIR)/%: $(TEST_DIR)/%.c | $(BIN_DIR)
 ##############################################################################################################
 
 .PHONY: all
-all: clean test bench example doc ## Build everything, run tests, benchmarks, and generate docs
+all: clean test bench example docs ## Build everything, run tests, benchmarks, and generate docs
 
 .PHONY: test
 test: $(TEST_BINARY) ## Build and run tests
@@ -83,7 +102,7 @@ example: $(EXAMPLE_BINARY) ## Run example program
 .PHONY: clean
 clean: ## Remove build artifacts
 	@echo "Cleaning up build artifacts..."
-	rm -rf $(BIN_DIR) $(DOC_DIR)/* *.gcno *.gcda *.gcov
+	rm -rf $(BIN_DIR) $(DOC_DIR)/* *.gcno *.gcda *.gcov zig-out .zig-cache
 
 .PHONY: format
 format: ## Format source code
@@ -124,8 +143,8 @@ coverage: clean $(TEST_BINARY) ## Generate code coverage report
 	gcov -o $(BIN_DIR) $(TEST_DIR)/test_bptree.c
 	@echo "Coverage report generated"
 
-.PHONY: doc
-doc: ## Generate documentation using Doxygen
+.PHONY: docs
+docs: ## Generate documentation using Doxygen
 	@echo "Generating documentation..."
 	@test -f Doxyfile || { echo "Error: Doxyfile not found."; exit 1; }
 	doxygen Doxyfile
@@ -203,6 +222,48 @@ cachegrind: $(BENCH_BINARY) ## Profile CPU cache usage using Valgrind's cachegri
 trace: $(BENCH_BINARY) ## Trace syscalls using strace
 	strace -o trace.log -T -tt ./$(BENCH_BINARY)
 	@echo "Syscall trace saved to trace.log"
+
+##############################################################################################################
+## Zig Build System Targets
+##############################################################################################################
+
+.PHONY: zig-build
+zig-build: ## Build all artifacts using Zig
+	$(check_zig)
+	@echo "Building with Zig (optimize=$(ZIG_OPTIMIZE))..."
+	$(ZIG) build $(ZIG_BUILD_OPTS) -j$(JOBS)
+
+.PHONY: zig-test
+zig-test: ## Build and run tests using Zig
+	$(check_zig)
+	@echo "Running tests (Zig build)..."
+	$(ZIG) build test $(ZIG_BUILD_OPTS) -j$(JOBS)
+
+.PHONY: zig-bench
+zig-bench: ## Build and run benchmarks using Zig
+	$(check_zig)
+	@echo "Running benchmarks (Zig build)..."
+	$(ZIG) build bench $(ZIG_BUILD_OPTS) -j$(JOBS)
+
+.PHONY: zig-example
+zig-example: ## Build and run example program using Zig
+	$(check_zig)
+	@echo "Running example (Zig build)..."
+	$(ZIG) build example $(ZIG_BUILD_OPTS) -j$(JOBS)
+
+.PHONY: zig-release
+zig-release: ZIG_OPTIMIZE=ReleaseFast
+zig-release: zig-build ## Build with Zig in ReleaseFast mode
+	@echo "Built in ReleaseFast mode (Zig)."
+
+.PHONY: zig-clean
+zig-clean: ## Remove Zig build artifacts
+	@echo "Cleaning Zig build artifacts..."
+	rm -rf zig-out .zig-cache
+
+##############################################################################################################
+## Git Hooks
+##############################################################################################################
 
 .PHONY: setup-hooks
 setup-hooks: ## Install Git hooks (pre-commit and pre-push)

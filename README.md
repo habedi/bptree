@@ -11,7 +11,7 @@
 [![Lints](https://img.shields.io/github/actions/workflow/status/habedi/bptree/lints.yml?label=lints&style=flat&labelColor=282c34&logo=github)](https://github.com/habedi/bptree/actions/workflows/lints.yml)
 [![Benchmarks](https://img.shields.io/github/actions/workflow/status/habedi/bptree/benches.yml?label=benches&style=flat&labelColor=282c34&logo=github)](https://github.com/habedi/bptree/actions/workflows/benches.yml)
 [![Code Coverage](https://img.shields.io/codecov/c/github/habedi/bptree?label=coverage&style=flat&labelColor=282c34&logo=codecov)](https://codecov.io/gh/habedi/bptree)
-[![CodeFactor](https://img.shields.io/codefactor/grade/github/habedi/bptree?label=code%20quality&style=flat&labelColor=282c34&logo=codefactor)](https://www.codefactor.io/repository/github/habedi/bptree)
+[![Zig](https://img.shields.io/badge/zig-0.16.0-F7A41D?style=flat&labelColor=282c34&logo=zig)](https://ziglang.org/download/)
 [![License](https://img.shields.io/badge/license-MIT-007ec6?label=license&style=flat&labelColor=282c34&logo=open-source-initiative)](https://github.com/habedi/bptree/blob/main/LICENSE)
 [![Release](https://img.shields.io/github/release/habedi/bptree.svg?label=release&style=flat&labelColor=282c34&logo=github)](https://github.com/habedi/bptree/releases/latest)
 
@@ -41,8 +41,10 @@ They are mainly used for ordered data access and range queries as part of a larg
 - Lightweight single-header C library (see [bptree.h](include/bptree.h))
 - Supports numeric and string keys as well as custom value types
 - Supports insertion, deletion, as well as point and range queries
+- Forward iterator with `find`, `lower_bound`, and `upper_bound`
 - Allows the user to manage memory for values
 - Compatible with C11 or newer
+- Builds with Make (with a C compiler like GCC or Clang) or Zig build system
 
 ---
 
@@ -71,7 +73,7 @@ To compile and run the example(s), use the `make example` command.
 ### Documentation
 
 API documentation can be generated using [Doxygen](https://www.doxygen.nl).
-To generate the documentation, use the `make doc` command and then open the `doc/html/index.html` file in a web browser.
+To generate the documentation, use the `make docs` command and then open the `docs/html/index.html` file in a web browser.
 
 #### API Summary
 
@@ -86,12 +88,31 @@ To generate the documentation, use the `make doc` command and then open the `doc
 | `bptree_get_range`          | `bptree_status` | Gets values for keys within `[start, end]` (inclusive) via out-parameters for the results array and count. The caller must free the results array using `bptree_free_range_results`. |
 | `bptree_free_range_results` | `void`          | Frees the array allocated by `bptree_get_range`.                                                                                                                                     |
 | `bptree_get_stats`          | `bptree_stats`  | Returns tree statistics, including key count, height, and node count of the tree.                                                                                                    |
-| `bptree_check_invariants`   | `bool`          | Checks structural correctness of the B+ tree (e.g., key ordering, node fill levels, and leaf depth).  
+| `bptree_count`              | `int`           | Returns the number of key-value pairs in the tree. This is O(1).                                                                                                                     |
+| `bptree_height`             | `int`           | Returns the current height of the tree. This is O(1).                                                                                                                                |
+| `bptree_max_keys`           | `int`           | Returns the maximum number of keys per node (as configured at creation). This is O(1).                                                                                               |
+| `bptree_clear`              | `void`          | Removes all elements and resets the tree to an empty state. The tree can be reused. Values are not freed.                                                                            |
+| `bptree_check_invariants`   | `bool`          | Checks structural correctness of the B+ tree (e.g., key ordering, node fill levels, and leaf depth).                                                                                 |
+
+##### Iterator Functions
+
+| Function                  | Return Type      | Description                                                                                            |
+|:--------------------------|:-----------------|:-------------------------------------------------------------------------------------------------------|
+| `bptree_iter_begin`       | `bptree_iter`    | Returns an iterator to the first (smallest-key) element. Invalid if the tree is empty.                 |
+| `bptree_iter_valid`       | `bool`           | Checks whether an iterator points to a valid element (not past-end).                                   |
+| `bptree_iter_next`        | `void`           | Advances the iterator to the next element in key order.                                                |
+| `bptree_iter_key`         | `bptree_key_t`   | Returns the key at the current iterator position.                                                      |
+| `bptree_iter_value`       | `bptree_value_t` | Returns the value at the current iterator position.                                                    |
+| `bptree_iter_equal`       | `bool`           | Checks whether two iterators point to the same position. Two invalid iterators are considered equal.   |
+| `bptree_iter_find`        | `bptree_iter`    | Returns an iterator to the element with the given key, or an invalid iterator if the key is not found. |
+| `bptree_iter_lower_bound` | `bptree_iter`    | Returns an iterator to the first element with a key >= the given key.                                  |
+| `bptree_iter_upper_bound` | `bptree_iter`    | Returns an iterator to the first element with a key > the given key.                                   |
 
 | Type             | Description                                                                                |
 |:-----------------|:-------------------------------------------------------------------------------------------|
-| `bptree`         | The main B+ tree data structure.                                                           |
+| `bptree`         | Opaque handle for a B+ tree. Access state through the accessor functions listed above.     |
 | `bptree_stats`   | The data type used for tree statistics (including key count, tree height, and node count). |
+| `bptree_iter`    | Forward iterator for traversing the tree in key order.                                     |
 | `bptree_key_t`   | The data type used for keys (configurable; default: `int64_t`).                            |
 | `bptree_value_t` | The data type used for values (configurable; default: `void *`).                           |
 | `bptree_status`  | Enum returned by most API functions showing success or failure (types) of operations.      |
@@ -164,6 +185,18 @@ To use fixed-size string keys (like 32-character strings) and store integer IDs 
 #include "bptree.h"
 ```
 
+### Building with Zig
+
+As an alternative to Make, the project can be built with [Zig](https://ziglang.org)'s build system.:
+
+```shell
+zig build test      # Build and run unit tests
+zig build bench     # Build and run benchmarks
+zig build example   # Build and run the example
+```
+
+Zig build targets are also available through Make: `make zig-test`, `make zig-bench`, `make zig-example`.
+
 ### Tests and Benchmarks
 
 | File                                  | Description                                                     |
@@ -171,7 +204,7 @@ To use fixed-size string keys (like 32-character strings) and store integer IDs 
 | [test_bptree.c](test/test_bptree.c)   | Unit tests for the B+ tree API.                                 |
 | [bench_bptree.c](test/bench_bptree.c) | Benchmarks for some of the operations supported by the B+ tree. |
 
-To run the tests and benchmarks, use the `make test` and `make bench` commands.
+To run the tests and benchmarks, use `make test` and `make bench` (or `zig build test` and `zig build bench`).
 
 -----
 
@@ -181,4 +214,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to make a contribution
 
 ### License
 
-Bptree is licensed under the MIT License ([LICENSE](LICENSE)).
+Bptree is licensed under the MIT License (see [LICENSE](LICENSE)).

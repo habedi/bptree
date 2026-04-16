@@ -43,7 +43,7 @@
  *   - This implementation is NOT thread-safe. Caller must provide external
  *     synchronization (e.g., mutexes) for concurrent access.
  *
- * @version 0.4.3
+ * @version 0.5.0
  * @author
  *   "Hassan Abedi <hassan.abedi.t+bptree@gmail.com>"
  * @copyright MIT License
@@ -66,15 +66,10 @@ extern "C" {
 #define BPTREE_API static
 #endif
 
-#include <assert.h>
-#include <stdalign.h>
-#include <stdarg.h>
+/* Public section only needs bool and fixed-width integer types.
+ * Implementation-only headers are included inside #ifdef BPTREE_IMPLEMENTATION. */
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
 
 #ifdef BPTREE_KEY_TYPE_STRING
 #ifndef BPTREE_KEY_SIZE
@@ -119,33 +114,21 @@ typedef enum {
 } bptree_status;
 
 /**
- * @brief Internal B+ tree node.
+ * @brief Opaque B+ tree node type.
  *
- * This structure is used internally by the tree; users should not access its members directly.
+ * The full definition is only available when BPTREE_IMPLEMENTATION is defined.
+ * Users of the library should treat this as an opaque type.
  */
 typedef struct bptree_node bptree_node;
-struct bptree_node {
-    bool is_leaf;      /**< True if node is a leaf node */
-    int num_keys;      /**< Number of keys stored in the node */
-    bptree_node* next; /**< Pointer to the next leaf (used in range queries) */
-    char data[]; /**< Flexible array member that holds keys and either values or child pointers */
-};
 
 /**
- * @brief B+ tree structure.
+ * @brief Opaque B+ tree handle.
  *
- * Represents the B+ tree and holds its configuration along with the root pointer.
+ * Obtained from bptree_create() and released with bptree_free().
+ * The full definition is only available when BPTREE_IMPLEMENTATION is defined;
+ * external consumers must access the tree exclusively through the public API.
  */
-typedef struct bptree {
-    int count;             /**< Total number of key/value pairs in the tree */
-    int height;            /**< Current height of the tree */
-    bool enable_debug;     /**< If true, debug messages will be printed */
-    int max_keys;          /**< Maximum number of keys allowed in any node */
-    int min_leaf_keys;     /**< Minimum keys needed in a non-root leaf node */
-    int min_internal_keys; /**< Minimum keys needed in a non-root internal node */
-    int (*compare)(const bptree_key_t*, const bptree_key_t*); /**< Function to compare two keys */
-    bptree_node* root; /**< Pointer to the root node of the tree */
-} bptree;
+typedef struct bptree bptree;
 
 /**
  * @brief B+ tree statistics.
@@ -155,6 +138,21 @@ typedef struct bptree_stats {
     int height;     /**< Tree height */
     int node_count; /**< Total number of nodes in the tree */
 } bptree_stats;
+
+/**
+ * @brief Forward iterator for traversing the B+ tree in key order.
+ *
+ * The struct is exposed only so iterators can be declared as local values.
+ * Callers must treat the fields as opaque and interact with iterators
+ * exclusively through the `bptree_iter_*` functions.
+ *
+ * @warning Modifying the tree (insert/remove) invalidates all live iterators.
+ */
+typedef struct bptree_iter {
+    const bptree* tree; /**< Opaque: do not access directly. */
+    bptree_node* node;  /**< Opaque: do not access directly. */
+    int index;          /**< Opaque: do not access directly. */
+} bptree_iter;
 
 /*------------------------------------------------------------------------------
  * Public API
@@ -259,6 +257,46 @@ BPTREE_API void bptree_free_range_results(bptree_value_t* results);
 BPTREE_API bptree_stats bptree_get_stats(const bptree* tree);
 
 /**
+ * @brief Returns the number of key-value pairs in the tree.
+ *
+ * This is an O(1) operation.
+ *
+ * @param tree Pointer to the B+ tree.
+ * @return The element count, or 0 if tree is NULL.
+ */
+BPTREE_API int bptree_count(const bptree* tree);
+
+/**
+ * @brief Returns the current height of the tree.
+ *
+ * An empty tree has height 1 (the root leaf). This is an O(1) operation.
+ *
+ * @param tree Pointer to the B+ tree.
+ * @return The tree height, or 0 if tree is NULL.
+ */
+BPTREE_API int bptree_height(const bptree* tree);
+
+/**
+ * @brief Returns the maximum number of keys a node can hold.
+ *
+ * Reports the value passed to bptree_create(). This is an O(1) operation.
+ *
+ * @param tree Pointer to the B+ tree.
+ * @return The configured max_keys value, or 0 if tree is NULL.
+ */
+BPTREE_API int bptree_max_keys(const bptree* tree);
+
+/**
+ * @brief Removes all elements from the tree.
+ *
+ * Frees all internal nodes and resets the tree to an empty state.
+ * The tree itself is not freed and can be reused. Values are not freed.
+ *
+ * @param tree Pointer to the B+ tree.
+ */
+BPTREE_API void bptree_clear(bptree* tree);
+
+/**
  * @brief Checks the internal invariants of the tree.
  *
  * Verifies that the tree's properties (key order, occupancy, etc.) are maintained.
@@ -279,7 +317,135 @@ BPTREE_API bool bptree_check_invariants(const bptree* tree);
  */
 BPTREE_API bool bptree_contains(const bptree* tree, const bptree_key_t* key);
 
+/*------------------------------------------------------------------------------
+ * Iterator API
+ *----------------------------------------------------------------------------*/
+
+/**
+ * @brief Returns an iterator to the first (smallest) element.
+ *
+ * @param tree Pointer to the B+ tree.
+ * @return Iterator positioned at the first element, or an invalid iterator if the tree is empty.
+ */
+BPTREE_API bptree_iter bptree_iter_begin(const bptree* tree);
+
+/**
+ * @brief Checks whether an iterator is valid (not past-end).
+ *
+ * @param it Pointer to the iterator.
+ * @return True if the iterator points to a valid element.
+ */
+BPTREE_API bool bptree_iter_valid(const bptree_iter* it);
+
+/**
+ * @brief Advances the iterator to the next element in key order.
+ *
+ * If the iterator is already past-end, this is a no-op.
+ *
+ * @param it Pointer to the iterator to advance.
+ */
+BPTREE_API void bptree_iter_next(bptree_iter* it);
+
+/**
+ * @brief Returns the key at the current iterator position.
+ *
+ * @pre The iterator must be valid.
+ * @param it Pointer to the iterator.
+ * @return The key at the current position.
+ */
+BPTREE_API bptree_key_t bptree_iter_key(const bptree_iter* it);
+
+/**
+ * @brief Returns the value at the current iterator position.
+ *
+ * @pre The iterator must be valid.
+ * @param it Pointer to the iterator.
+ * @return The value at the current position.
+ */
+BPTREE_API bptree_value_t bptree_iter_value(const bptree_iter* it);
+
+/**
+ * @brief Checks whether two iterators point to the same position.
+ *
+ * Two invalid (past-end) iterators are considered equal.
+ *
+ * @param a Pointer to the first iterator.
+ * @param b Pointer to the second iterator.
+ * @return True if both iterators point to the same element or are both invalid.
+ */
+BPTREE_API bool bptree_iter_equal(const bptree_iter* a, const bptree_iter* b);
+
+/**
+ * @brief Returns an iterator to the element with the given key.
+ *
+ * @param tree Pointer to the B+ tree.
+ * @param key Pointer to the key to search for.
+ * @return Iterator positioned at the element, or an invalid iterator if not found.
+ */
+BPTREE_API bptree_iter bptree_iter_find(const bptree* tree, const bptree_key_t* key);
+
+/**
+ * @brief Returns an iterator to the first element with a key >= the given key.
+ *
+ * @param tree Pointer to the B+ tree.
+ * @param key Pointer to the lower bound key.
+ * @return Iterator positioned at the first element >= key, or invalid if none exists.
+ */
+BPTREE_API bptree_iter bptree_iter_lower_bound(const bptree* tree, const bptree_key_t* key);
+
+/**
+ * @brief Returns an iterator to the first element with a key > the given key.
+ *
+ * @param tree Pointer to the B+ tree.
+ * @param key Pointer to the upper bound key.
+ * @return Iterator positioned at the first element > key, or invalid if none exists.
+ */
+BPTREE_API bptree_iter bptree_iter_upper_bound(const bptree* tree, const bptree_key_t* key);
+
 #ifdef BPTREE_IMPLEMENTATION
+
+#include <assert.h>
+#include <stdalign.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+/*==============================================================================
+ * Internal Types
+ *============================================================================*/
+
+/**
+ * @brief Internal B+ tree structure.
+ *
+ * This definition is only available when BPTREE_IMPLEMENTATION is defined.
+ * External consumers must use the public API (bptree_count, bptree_height,
+ * bptree_max_keys, bptree_get_stats, etc.) to inspect tree state.
+ */
+struct bptree {
+    int count;             /**< Total number of key/value pairs in the tree */
+    int height;            /**< Current height of the tree */
+    bool enable_debug;     /**< If true, debug messages will be printed */
+    int max_keys;          /**< Maximum number of keys allowed in any node */
+    int min_leaf_keys;     /**< Minimum keys needed in a non-root leaf node */
+    int min_internal_keys; /**< Minimum keys needed in a non-root internal node */
+    int (*compare)(const bptree_key_t*, const bptree_key_t*); /**< Function to compare two keys */
+    bptree_node* root; /**< Pointer to the root node of the tree */
+};
+
+/**
+ * @brief Internal B+ tree node.
+ *
+ * This definition is only available when BPTREE_IMPLEMENTATION is defined.
+ * Users of the library should treat bptree_node as an opaque type.
+ */
+struct bptree_node {
+    bool is_leaf;      /**< True if node is a leaf node */
+    int num_keys;      /**< Number of keys stored in the node */
+    bptree_node* next; /**< Pointer to the next leaf (used in range queries) */
+    char data[]; /**< Flexible array member that holds keys and either values or child pointers */
+};
 
 /*==============================================================================
  * Internal Functions and Implementation Details
@@ -299,8 +465,11 @@ static void bptree_debug_print(const bool enable, const char* fmt, ...) {
     char time_buf[64];
     const time_t now = time(NULL);
     const struct tm* tm_info = localtime(&now);
-    // Format the timestamp as "YYYY-MM-DD HH:MM:SS"
-    strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", tm_info);
+    if (tm_info) {
+        strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", tm_info);
+    } else {
+        snprintf(time_buf, sizeof(time_buf), "(unknown time)");
+    }
     printf("[%s] [BPTREE DEBUG] ", time_buf);
     va_list args;
     va_start(args, fmt);
@@ -533,8 +702,9 @@ static bool bptree_check_invariants_node(bptree_node* node, const bptree* tree, 
             return false;
         }
         bptree_node** children = bptree_node_children(node, tree->max_keys);
+        assert(node->num_keys >= 0);
         // Check child pointers and recursively validate children.
-        if (node->num_keys >= 0) {
+        {
             if (!children[0]) {
                 bptree_debug_print(tree->enable_debug,
                                    "Invariant Fail: Internal node %p missing child[0]\n",
@@ -600,13 +770,6 @@ static bool bptree_check_invariants_node(bptree_node* node, const bptree* tree, 
                 }
                 if (!bptree_check_invariants_node(children[i], tree, depth + 1, leaf_depth))
                     return false;
-            }
-        } else {
-            if (!is_root || tree->count > 0) {
-                bptree_debug_print(tree->enable_debug,
-                                   "Invariant Fail: Internal node %p has < 0 keys (%d)\n",
-                                   (void*)node, node->num_keys);
-                return false;
             }
         }
         return true;
@@ -962,10 +1125,10 @@ static void bptree_rebalance_up(bptree* tree, bptree_node** node_stack, const in
         tree->root = bptree_node_children(old_root, tree->max_keys)[0];
         tree->height--;
         free(old_root);
-    } else if (tree->count == 0 && tree->root && tree->root->num_keys != 0) {
-        bptree_debug_print(tree->enable_debug, "Tree empty, ensuring root node is empty.\n");
-        tree->root->num_keys = 0;
     }
+    // When count reaches 0, the root should always be a leaf from prior
+    // shrink operations. Assert this rather than silently patching state.
+    assert(tree->count > 0 || (tree->root->is_leaf && tree->root->num_keys == 0));
 }
 
 /**
@@ -1051,6 +1214,11 @@ static bptree_status bptree_insert_internal(bptree* tree, bptree_node* node,
             const int new_node_keys = total_keys - split_idx;
             bptree_node* new_leaf = bptree_node_alloc(tree, true);
             if (!new_leaf) {
+                // Undo the insertion by shifting keys/values back over the inserted position.
+                memmove(&keys[pos], &keys[pos + 1],
+                        (node->num_keys - pos - 1) * sizeof(bptree_key_t));
+                memmove(&values[pos], &values[pos + 1],
+                        (node->num_keys - pos - 1) * sizeof(bptree_value_t));
                 node->num_keys--;
                 bptree_debug_print(tree->enable_debug, "Leaf split allocation failed!\n");
                 return BPTREE_ALLOCATION_FAILURE;
@@ -1101,9 +1269,16 @@ static bptree_status bptree_insert_internal(bptree* tree, bptree_node* node,
             const int new_node_keys = total_keys - split_idx - 1;
             bptree_node* new_internal = bptree_node_alloc(tree, false);
             if (!new_internal) {
-                node->num_keys--;
-                bptree_debug_print(tree->enable_debug, "Internal split allocation failed!\n");
-                return BPTREE_ALLOCATION_FAILURE;
+                // The child split already succeeded and cannot be undone. The promoted
+                // key and child pointer are already inserted in this node, which now
+                // holds max_keys+1 keys. The buffer has room (allocated for max_keys+1
+                // keys and max_keys+2 children), so the data is safe. Accept the
+                // temporary overfull state rather than leaking the child node.
+                *new_child = NULL;
+                bptree_debug_print(tree->enable_debug,
+                                   "Internal split allocation failed! Node left with %d keys.\n",
+                                   node->num_keys);
+                return BPTREE_OK;
             }
             bptree_key_t* new_keys = bptree_node_keys(new_internal);
             bptree_node** new_children = bptree_node_children(new_internal, tree->max_keys);
@@ -1138,19 +1313,50 @@ BPTREE_API bptree_status bptree_put(bptree* tree, const bptree_key_t* key, bptre
             bptree_debug_print(tree->enable_debug, "Root split occurred. Creating new root.\n");
             bptree_node* new_root = bptree_node_alloc(tree, false);
             if (!new_root) {
-                bptree_free_node(new_node, tree);
-                return BPTREE_ALLOCATION_FAILURE;
+                // Cannot allocate a new root. Reunify the split by copying
+                // keys/values/children from new_node back into the old root.
+                // The old root's buffer has room for max_keys+1 entries.
+                if (tree->root->is_leaf) {
+                    bptree_key_t* rk = bptree_node_keys(tree->root);
+                    bptree_value_t* rv = bptree_node_values(tree->root, tree->max_keys);
+                    const bptree_key_t* nk = bptree_node_keys(new_node);
+                    const bptree_value_t* nv = bptree_node_values(new_node, tree->max_keys);
+                    memcpy(&rk[tree->root->num_keys], nk,
+                           new_node->num_keys * sizeof(bptree_key_t));
+                    memcpy(&rv[tree->root->num_keys], nv,
+                           new_node->num_keys * sizeof(bptree_value_t));
+                    tree->root->num_keys += new_node->num_keys;
+                    tree->root->next = new_node->next;
+                } else {
+                    bptree_key_t* rk = bptree_node_keys(tree->root);
+                    bptree_node** rc = bptree_node_children(tree->root, tree->max_keys);
+                    const bptree_key_t* nk = bptree_node_keys(new_node);
+                    bptree_node** nc = bptree_node_children(new_node, tree->max_keys);
+                    rk[tree->root->num_keys] = promoted_key;
+                    memcpy(&rk[tree->root->num_keys + 1], nk,
+                           new_node->num_keys * sizeof(bptree_key_t));
+                    memcpy(&rc[tree->root->num_keys + 1], nc,
+                           (new_node->num_keys + 1) * sizeof(bptree_node*));
+                    tree->root->num_keys += 1 + new_node->num_keys;
+                }
+                free(new_node);
+                bptree_debug_print(tree->enable_debug,
+                                   "Root split allocation failed! Root left with %d keys.\n",
+                                   tree->root->num_keys);
+                // Insertion succeeded; root is temporarily overfull but data-safe.
+                // Fall through to increment count below.
+            } else {
+                bptree_key_t* root_keys = bptree_node_keys(new_root);
+                bptree_node** root_children = bptree_node_children(new_root, tree->max_keys);
+                root_keys[0] = promoted_key;
+                root_children[0] = tree->root;
+                root_children[1] = new_node;
+                new_root->num_keys = 1;
+                tree->root = new_root;
+                tree->height++;
+                bptree_debug_print(tree->enable_debug, "New root created. Tree height: %d\n",
+                                   tree->height);
             }
-            bptree_key_t* root_keys = bptree_node_keys(new_root);
-            bptree_node** root_children = bptree_node_children(new_root, tree->max_keys);
-            root_keys[0] = promoted_key;
-            root_children[0] = tree->root;
-            root_children[1] = new_node;
-            new_root->num_keys = 1;
-            tree->root = new_root;
-            tree->height++;
-            bptree_debug_print(tree->enable_debug, "New root created. Tree height: %d\n",
-                               tree->height);
         }
         tree->count++;
     } else {
@@ -1353,6 +1559,22 @@ BPTREE_API bptree_stats bptree_get_stats(const bptree* tree) {
     return stats;
 }
 
+BPTREE_API int bptree_count(const bptree* tree) { return tree ? tree->count : 0; }
+
+BPTREE_API int bptree_height(const bptree* tree) { return tree ? tree->height : 0; }
+
+BPTREE_API int bptree_max_keys(const bptree* tree) { return tree ? tree->max_keys : 0; }
+
+BPTREE_API void bptree_clear(bptree* tree) {
+    if (!tree) return;
+    if (tree->root) {
+        bptree_free_node(tree->root, tree);
+    }
+    tree->root = bptree_node_alloc(tree, true);
+    tree->count = 0;
+    tree->height = 1;
+}
+
 BPTREE_API bool bptree_check_invariants(const bptree* tree) {
     if (!tree || !tree->root) return false;
     if (tree->count == 0) {
@@ -1375,8 +1597,8 @@ BPTREE_API bool bptree_contains(const bptree* tree, const bptree_key_t* key) {
 BPTREE_API bptree* bptree_create(const int max_keys,
                                  int (*compare)(const bptree_key_t*, const bptree_key_t*),
                                  const bool enable_debug) {
-    if (max_keys < 3) {
-        fprintf(stderr, "[BPTREE CREATE] Error: max_keys must be at least 3.\n");
+    if (max_keys < 3 || max_keys > 4096) {
+        fprintf(stderr, "[BPTREE CREATE] Error: max_keys must be between 3 and 4096.\n");
         return NULL;
     }
     bptree* tree = malloc(sizeof(bptree));
@@ -1416,6 +1638,115 @@ BPTREE_API void bptree_free(bptree* tree) {
         bptree_free_node(tree->root, tree);
     }
     free(tree);
+}
+
+/*==============================================================================
+ * Iterator Implementation
+ *============================================================================*/
+
+/**
+ * @brief Walk from the root to the leftmost leaf node.
+ */
+static bptree_node* bptree_leftmost_leaf(const bptree* tree) {
+    bptree_node* node = tree->root;
+    while (node && !node->is_leaf) {
+        node = bptree_node_children(node, tree->max_keys)[0];
+    }
+    return node;
+}
+
+/**
+ * @brief Navigate from the root to the leaf that would contain @p key.
+ */
+static bptree_node* bptree_find_leaf(const bptree* tree, const bptree_key_t* key) {
+    bptree_node* node = tree->root;
+    while (node && !node->is_leaf) {
+        const int pos = bptree_node_search(tree, node, key);
+        node = bptree_node_children(node, tree->max_keys)[pos];
+    }
+    return node;
+}
+
+BPTREE_API bptree_iter bptree_iter_begin(const bptree* tree) {
+    bptree_iter it = {NULL, NULL, 0};
+    if (!tree || !tree->root || tree->count == 0) return it;
+    it.tree = tree;
+    it.node = bptree_leftmost_leaf(tree);
+    it.index = 0;
+    return it;
+}
+
+BPTREE_API bool bptree_iter_valid(const bptree_iter* it) {
+    return it != NULL && it->node != NULL && it->index < it->node->num_keys;
+}
+
+BPTREE_API void bptree_iter_next(bptree_iter* it) {
+    if (!it || !it->node) return;
+    it->index++;
+    if (it->index >= it->node->num_keys) {
+        it->node = it->node->next;
+        it->index = 0;
+    }
+}
+
+BPTREE_API bptree_key_t bptree_iter_key(const bptree_iter* it) {
+    assert(it && it->node && it->index < it->node->num_keys);
+    return bptree_node_keys(it->node)[it->index];
+}
+
+BPTREE_API bptree_value_t bptree_iter_value(const bptree_iter* it) {
+    assert(it && it->node && it->index < it->node->num_keys);
+    return bptree_node_values(it->node, it->tree->max_keys)[it->index];
+}
+
+BPTREE_API bool bptree_iter_equal(const bptree_iter* a, const bptree_iter* b) {
+    if (!a || !b) return a == b;
+    return a->node == b->node && a->index == b->index;
+}
+
+BPTREE_API bptree_iter bptree_iter_find(const bptree* tree, const bptree_key_t* key) {
+    bptree_iter it = {NULL, NULL, 0};
+    if (!tree || !tree->root || !key || tree->count == 0) return it;
+    bptree_node* leaf = bptree_find_leaf(tree, key);
+    if (!leaf) return it;
+    const int pos = bptree_node_search(tree, leaf, key);
+    const bptree_key_t* keys = bptree_node_keys(leaf);
+    if (pos < leaf->num_keys && tree->compare(key, &keys[pos]) == 0) {
+        it.tree = tree;
+        it.node = leaf;
+        it.index = pos;
+    }
+    return it;
+}
+
+BPTREE_API bptree_iter bptree_iter_lower_bound(const bptree* tree, const bptree_key_t* key) {
+    bptree_iter it = {NULL, NULL, 0};
+    if (!tree || !tree->root || !key || tree->count == 0) return it;
+    bptree_node* leaf = bptree_find_leaf(tree, key);
+    if (!leaf) return it;
+    int pos = bptree_node_search(tree, leaf, key);
+    // If pos is past the end of this leaf, the answer is in the next leaf.
+    if (pos >= leaf->num_keys) {
+        leaf = leaf->next;
+        pos = 0;
+    }
+    if (leaf && pos < leaf->num_keys) {
+        it.tree = tree;
+        it.node = leaf;
+        it.index = pos;
+    }
+    return it;
+}
+
+BPTREE_API bptree_iter bptree_iter_upper_bound(const bptree* tree, const bptree_key_t* key) {
+    bptree_iter it = bptree_iter_lower_bound(tree, key);
+    if (!bptree_iter_valid(&it)) return it;
+    // lower_bound gives first key >= target. If it equals the target, advance past it.
+    const bptree_key_t* keys = bptree_node_keys(it.node);
+    if (tree->compare(key, &keys[it.index]) == 0) {
+        bptree_iter_next(&it);
+    }
+    return it;
 }
 
 #endif

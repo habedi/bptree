@@ -5,7 +5,7 @@
 # Project-related settings
 #---------------------------------------------------------------------------
 PROJECT_NAME       = "Bptree"
-OUTPUT_DIRECTORY   = doc
+OUTPUT_DIRECTORY   = docs
 CREATE_SUBDIRS     = NO
 
 #---------------------------------------------------------------------------
@@ -20,11 +20,11 @@ EXCLUDE_PATTERNS   = tmp
 #---------------------------------------------------------------------------
 # Output formats
 #---------------------------------------------------------------------------
-# HTML output will be placed in doc/html
+# HTML output will be placed in docs/html
 GENERATE_HTML      = YES
 HTML_OUTPUT        = html
 
-# LaTeX output will be placed in doc/latex
+# LaTeX output will be placed in docs/latex
 GENERATE_LATEX     = NO
 LATEX_OUTPUT       = latex
 

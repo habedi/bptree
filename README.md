@@ -73,7 +73,7 @@ To compile and run the example(s), use the `make example` command.
 ### Documentation
 
 API documentation can be generated using [Doxygen](https://www.doxygen.nl).
-To generate the documentation, use the `make doc` command and then open the `doc/html/index.html` file in a web browser.
+To generate the documentation, use the `make docs` command and then open the `docs/html/index.html` file in a web browser.
 
 #### API Summary
 

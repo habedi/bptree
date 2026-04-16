@@ -11,7 +11,7 @@ BUILD_TYPE ?= debug
 BIN_DIR    := bin
 TEST_DIR   := test
 INC_DIR    := include
-DOC_DIR    := doc
+DOC_DIR    := docs
 ASSET_DIR := assets
 
 # ################################################################################
@@ -82,7 +82,7 @@ $(BIN_DIR)/%: $(TEST_DIR)/%.c | $(BIN_DIR)
 ##############################################################################################################
 
 .PHONY: all
-all: clean test bench example doc ## Build everything, run tests, benchmarks, and generate docs
+all: clean test bench example docs ## Build everything, run tests, benchmarks, and generate docs
 
 .PHONY: test
 test: $(TEST_BINARY) ## Build and run tests
@@ -143,8 +143,8 @@ coverage: clean $(TEST_BINARY) ## Generate code coverage report
 	gcov -o $(BIN_DIR) $(TEST_DIR)/test_bptree.c
 	@echo "Coverage report generated"
 
-.PHONY: doc
-doc: ## Generate documentation using Doxygen
+.PHONY: docs
+docs: ## Generate documentation using Doxygen
 	@echo "Generating documentation..."
 	@test -f Doxyfile || { echo "Error: Doxyfile not found."; exit 1; }
 	doxygen Doxyfile

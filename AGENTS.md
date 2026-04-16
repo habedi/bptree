@@ -127,7 +127,7 @@ Run the relevant targets for any change:
 | Memory check      | `make memcheck`    | Runs Valgrind leak checks on tests, benchmarks, and examples |
 | Address sanitizer | `make asan`        | Builds and runs with AddressSanitizer enabled                |
 | UB sanitizer      | `make ubsan`       | Builds and runs with UndefinedBehaviorSanitizer enabled      |
-| Documentation     | `make doc`         | Generates Doxygen API docs into `doc/html/`                  |
+| Documentation     | `make docs`        | Generates Doxygen API docs into `docs/html/`                 |
 | Everything        | `make all`         | Runs `clean`, `test`, `bench`, `example`, and `doc`          |
 | Zig tests         | `make zig-test`    | Builds and runs tests via the Zig build system               |
 | Zig benchmarks    | `make zig-bench`   | Builds and runs benchmarks via the Zig build system          |
@@ -178,7 +178,7 @@ Before submitting:
 3. `make format` has been run (no formatting diff).
 4. `make example` still succeeds when touching public API functions.
 5. `make memcheck` or `make asan` passes when changing memory-related code.
-6. Doxygen comments updated (`make doc`) if the public API surface changed.
+6. Doxygen comments updated (`make docs`) if the public API surface changed.
 
 ## Commit and PR Hygiene
 

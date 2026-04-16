@@ -20,15 +20,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y make doxygen
 
-      - name: Generate Documentation
+      - name: Generate documentation
         run: make docs
 
       - name: Deploy to GitHub Pages

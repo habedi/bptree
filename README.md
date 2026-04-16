@@ -40,8 +40,10 @@ They are mainly used for ordered data access and range queries as part of a larg
 - Lightweight single-header C library (see [bptree.h](include/bptree.h))
 - Supports numeric and string keys as well as custom value types
 - Supports insertion, deletion, as well as point and range queries
+- Forward iterator with `find`, `lower_bound`, and `upper_bound`
 - Allows the user to manage memory for values
 - Compatible with C11 or newer
+- Builds with Make (GCC/Clang) or Zig 0.16+
 
 ---
 
@@ -85,21 +87,24 @@ To generate the documentation, use the `make doc` command and then open the `doc
 | `bptree_get_range`          | `bptree_status` | Gets values for keys within `[start, end]` (inclusive) via out-parameters for the results array and count. The caller must free the results array using `bptree_free_range_results`. |
 | `bptree_free_range_results` | `void`          | Frees the array allocated by `bptree_get_range`.                                                                                                                                     |
 | `bptree_get_stats`          | `bptree_stats`  | Returns tree statistics, including key count, height, and node count of the tree.                                                                                                    |
+| `bptree_count`              | `int`           | Returns the number of key-value pairs in the tree. O(1).                                                                                                                             |
+| `bptree_height`             | `int`           | Returns the current height of the tree. O(1).                                                                                                                                        |
+| `bptree_clear`              | `void`          | Removes all elements and resets the tree to an empty state. The tree can be reused. Values are not freed.                                                                            |
 | `bptree_check_invariants`   | `bool`          | Checks structural correctness of the B+ tree (e.g., key ordering, node fill levels, and leaf depth).                                                                                 |
 
 ##### Iterator Functions
 
-| Function                    | Return Type     | Description                                                                                                  |
-|:----------------------------|:----------------|:-------------------------------------------------------------------------------------------------------------|
-| `bptree_iter_begin`         | `bptree_iter`   | Returns an iterator to the first (smallest-key) element. Invalid if the tree is empty.                       |
-| `bptree_iter_valid`         | `bool`          | Checks whether an iterator points to a valid element (not past-end).                                         |
-| `bptree_iter_next`          | `void`          | Advances the iterator to the next element in key order.                                                      |
-| `bptree_iter_key`           | `bptree_key_t`  | Returns the key at the current iterator position.                                                            |
-| `bptree_iter_value`         | `bptree_value_t`| Returns the value at the current iterator position.                                                          |
-| `bptree_iter_equal`         | `bool`          | Checks whether two iterators point to the same position. Two invalid iterators are considered equal.         |
-| `bptree_iter_find`          | `bptree_iter`   | Returns an iterator to the element with the given key, or an invalid iterator if the key is not found.       |
-| `bptree_iter_lower_bound`   | `bptree_iter`   | Returns an iterator to the first element with a key >= the given key.                                        |
-| `bptree_iter_upper_bound`   | `bptree_iter`   | Returns an iterator to the first element with a key > the given key.                                         |
+| Function                  | Return Type      | Description                                                                                            |
+|:--------------------------|:-----------------|:-------------------------------------------------------------------------------------------------------|
+| `bptree_iter_begin`       | `bptree_iter`    | Returns an iterator to the first (smallest-key) element. Invalid if the tree is empty.                 |
+| `bptree_iter_valid`       | `bool`           | Checks whether an iterator points to a valid element (not past-end).                                   |
+| `bptree_iter_next`        | `void`           | Advances the iterator to the next element in key order.                                                |
+| `bptree_iter_key`         | `bptree_key_t`   | Returns the key at the current iterator position.                                                      |
+| `bptree_iter_value`       | `bptree_value_t` | Returns the value at the current iterator position.                                                    |
+| `bptree_iter_equal`       | `bool`           | Checks whether two iterators point to the same position. Two invalid iterators are considered equal.   |
+| `bptree_iter_find`        | `bptree_iter`    | Returns an iterator to the element with the given key, or an invalid iterator if the key is not found. |
+| `bptree_iter_lower_bound` | `bptree_iter`    | Returns an iterator to the first element with a key >= the given key.                                  |
+| `bptree_iter_upper_bound` | `bptree_iter`    | Returns an iterator to the first element with a key > the given key.                                   |
 
 | Type             | Description                                                                                |
 |:-----------------|:-------------------------------------------------------------------------------------------|
@@ -178,6 +183,18 @@ To use fixed-size string keys (like 32-character strings) and store integer IDs 
 #include "bptree.h"
 ```
 
+### Building with Zig
+
+As an alternative to Make, the project can be built with [Zig](https://ziglang.org) 0.16.0 or newer:
+
+```shell
+zig build test      # Build and run unit tests
+zig build bench     # Build and run benchmarks
+zig build example   # Build and run the example program
+```
+
+Zig build targets are also available through Make: `make zig-test`, `make zig-bench`, `make zig-example`.
+
 ### Tests and Benchmarks
 
 | File                                  | Description                                                     |
@@ -185,7 +202,7 @@ To use fixed-size string keys (like 32-character strings) and store integer IDs 
 | [test_bptree.c](test/test_bptree.c)   | Unit tests for the B+ tree API.                                 |
 | [bench_bptree.c](test/bench_bptree.c) | Benchmarks for some of the operations supported by the B+ tree. |
 
-To run the tests and benchmarks, use the `make test` and `make bench` commands.
+To run the tests and benchmarks, use `make test` and `make bench` (or `zig build test` and `zig build bench`).
 
 -----
 

@@ -66,15 +66,10 @@ extern "C" {
 #define BPTREE_API static
 #endif
 
-#include <assert.h>
-#include <stdalign.h>
-#include <stdarg.h>
+/* Public section only needs bool and fixed-width integer types.
+ * Implementation-only headers are included inside #ifdef BPTREE_IMPLEMENTATION. */
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
 
 #ifdef BPTREE_KEY_TYPE_STRING
 #ifndef BPTREE_KEY_SIZE
@@ -119,17 +114,12 @@ typedef enum {
 } bptree_status;
 
 /**
- * @brief Internal B+ tree node.
+ * @brief Opaque B+ tree node type.
  *
- * This structure is used internally by the tree; users should not access its members directly.
+ * The full definition is only available when BPTREE_IMPLEMENTATION is defined.
+ * Users of the library should treat this as an opaque type.
  */
 typedef struct bptree_node bptree_node;
-struct bptree_node {
-    bool is_leaf;      /**< True if node is a leaf node */
-    int num_keys;      /**< Number of keys stored in the node */
-    bptree_node* next; /**< Pointer to the next leaf (used in range queries) */
-    char data[]; /**< Flexible array member that holds keys and either values or child pointers */
-};
 
 /**
  * @brief B+ tree structure.
@@ -273,6 +263,36 @@ BPTREE_API void bptree_free_range_results(bptree_value_t* results);
 BPTREE_API bptree_stats bptree_get_stats(const bptree* tree);
 
 /**
+ * @brief Returns the number of key-value pairs in the tree.
+ *
+ * This is an O(1) operation.
+ *
+ * @param tree Pointer to the B+ tree.
+ * @return The element count, or 0 if tree is NULL.
+ */
+BPTREE_API int bptree_count(const bptree* tree);
+
+/**
+ * @brief Returns the current height of the tree.
+ *
+ * An empty tree has height 1 (the root leaf). This is an O(1) operation.
+ *
+ * @param tree Pointer to the B+ tree.
+ * @return The tree height, or 0 if tree is NULL.
+ */
+BPTREE_API int bptree_height(const bptree* tree);
+
+/**
+ * @brief Removes all elements from the tree.
+ *
+ * Frees all internal nodes and resets the tree to an empty state.
+ * The tree itself is not freed and can be reused. Values are not freed.
+ *
+ * @param tree Pointer to the B+ tree.
+ */
+BPTREE_API void bptree_clear(bptree* tree);
+
+/**
  * @brief Checks the internal invariants of the tree.
  *
  * Verifies that the tree's properties (key order, occupancy, etc.) are maintained.
@@ -379,6 +399,31 @@ BPTREE_API bptree_iter bptree_iter_lower_bound(const bptree* tree, const bptree_
 BPTREE_API bptree_iter bptree_iter_upper_bound(const bptree* tree, const bptree_key_t* key);
 
 #ifdef BPTREE_IMPLEMENTATION
+
+#include <assert.h>
+#include <stdalign.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+/*==============================================================================
+ * Internal Types
+ *============================================================================*/
+
+/**
+ * @brief Internal B+ tree node.
+ *
+ * This definition is only available when BPTREE_IMPLEMENTATION is defined.
+ * Users of the library should treat bptree_node as an opaque type.
+ */
+struct bptree_node {
+    bool is_leaf;      /**< True if node is a leaf node */
+    int num_keys;      /**< Number of keys stored in the node */
+    bptree_node* next; /**< Pointer to the next leaf (used in range queries) */
+    char data[]; /**< Flexible array member that holds keys and either values or child pointers */
+};
 
 /*==============================================================================
  * Internal Functions and Implementation Details
@@ -1490,6 +1535,20 @@ BPTREE_API bptree_stats bptree_get_stats(const bptree* tree) {
         stats.node_count = bptree_count_nodes(tree->root, tree);
     }
     return stats;
+}
+
+BPTREE_API int bptree_count(const bptree* tree) { return tree ? tree->count : 0; }
+
+BPTREE_API int bptree_height(const bptree* tree) { return tree ? tree->height : 0; }
+
+BPTREE_API void bptree_clear(bptree* tree) {
+    if (!tree) return;
+    if (tree->root) {
+        bptree_free_node(tree->root, tree);
+    }
+    tree->root = bptree_node_alloc(tree, true);
+    tree->count = 0;
+    tree->height = 1;
 }
 
 BPTREE_API bool bptree_check_invariants(const bptree* tree) {

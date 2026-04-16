@@ -34,14 +34,18 @@ Priorities, in order:
 
 ## Repository Layout
 
-- `include/bptree.h`: Single-header library. Contains both the public API declarations and the implementation (guarded by `BPTREE_IMPLEMENTATION`).
-  This is the only source file that ships to users.
+- `include/bptree.h`: Single-header library. Public API declarations are at the top; the implementation is guarded by
+  `#ifdef BPTREE_IMPLEMENTATION`. Internal types (e.g., `bptree_node`) are defined only inside that guard.
 - `test/test_bptree.c`: Unit test suite using a custom test harness (`ASSERT`, `RUN_TEST` macros).
 - `test/bench_bptree.c`: Performance benchmarks for insertions, searches, deletions, iteration, and range queries.
 - `test/example.c`: Example usage demonstrating tree creation, CRUD operations, range queries, and custom comparators.
 - `test/extras/`: Additional test files for specific scenarios (merge operations, bug reproductions, string keys).
-- `.github/workflows/`: CI workflows (`tests.yml` for unit tests and coverage, `lints.yml` for static analysis, `benches.yml` for benchmarks).
-- `Makefile`: GNU Make build automation with targets for building, testing, linting, formatting, profiling, and more.
+- `.github/workflows/`: CI workflows (`tests.yml` for unit tests and coverage, `lints.yml` for static analysis, `benches.yml`
+  for benchmarks).
+- `Makefile`: GNU Make build automation with targets for building, testing, linting, formatting, profiling, and Zig build
+  integration.
+- `build.zig` / `build.zig.zon`: Zig build system configuration (requires Zig 0.16.0). Compiles the same C source files as the
+  Makefile.
 - `.clang-format`: Code formatting rules (Google base style, 4-space indent, 100-column limit).
 - `Doxyfile`: Doxygen configuration for API documentation generation.
 
@@ -52,6 +56,11 @@ Priorities, in order:
 The entire library lives in `include/bptree.h`. Users include the header normally for declarations, and define
 `BPTREE_IMPLEMENTATION` in exactly one translation unit to pull in the implementation. This keeps integration simple: copy one
 file, add two lines of code.
+
+The public section (before the `#ifdef BPTREE_IMPLEMENTATION` guard) includes only `<stdbool.h>` and `<stdint.h>`.
+Implementation-only headers (`assert.h`, `stdalign.h`, `stdarg.h`, `stdio.h`, `stdlib.h`, `string.h`, `time.h`) are included
+inside the guard to avoid polluting the consumer's namespace. `bptree_node` is an opaque type in the public section (forward
+declaration only); its full definition is inside the implementation guard.
 
 ### Key and Value Generics
 
@@ -64,7 +73,10 @@ provides default comparators for both numeric and string key types; users can su
 - **Insertion** (`bptree_put`): inserts a key-value pair, splitting nodes as needed. Duplicate keys are rejected.
 - **Search** (`bptree_get`, `bptree_contains`): traverses internal nodes to find the correct leaf.
 - **Deletion** (`bptree_remove`): removes a key-value pair and rebalances the tree via key borrowing or node merging.
-- **Range query** (`bptree_get_range`): returns all key-value pairs in a `[start, end]` inclusive range by scanning leaf nodes.
+- **Range query** (`bptree_get_range`): returns all values in a `[start, end]` inclusive range by scanning leaf nodes.
+- **Iteration** (`bptree_iter_*`): forward iterator over the leaf-level linked list. Supports `begin`, `next`, `find`,
+  `lower_bound`, and `upper_bound`.
+- **Accessors** (`bptree_count`, `bptree_height`): O(1) reads. `bptree_clear` resets the tree without freeing it.
 
 ### Node Layout
 
@@ -84,8 +96,9 @@ freeing the pointed-to data. `bptree_free` releases the tree structure but not e
 
 ### Dependencies
 
-Bptree has **no external C dependencies**. It uses only C11 standard library headers (`stdlib.h`, `string.h`, `stdio.h`,
-`stdint.h`, `stdbool.h`, `stdalign.h`, `stdarg.h`, `assert.h`, `time.h`). Do not add dependencies without prior discussion.
+Bptree has **no external C dependencies**. The public header requires only `<stdbool.h>` and `<stdint.h>`. The implementation
+additionally uses `<assert.h>`, `<stdalign.h>`, `<stdarg.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>`, and `<time.h>`. Do not
+add dependencies without prior discussion.
 
 ## C Conventions
 
@@ -103,18 +116,22 @@ Bptree has **no external C dependencies**. It uses only C11 standard library hea
 
 Run the relevant targets for any change:
 
-| Target            | Command         | What It Runs                                                 |
-|-------------------|-----------------|--------------------------------------------------------------|
-| Unit tests        | `make test`     | Compiles and runs `test/test_bptree.c`                       |
-| Lint              | `make lint`     | Runs `cppcheck` static analysis on the `test/` directory     |
-| Format check      | `make format`   | Formats all `.c` and `.h` files with `clang-format`          |
-| Benchmarks        | `make bench`    | Compiles and runs `test/bench_bptree.c`                      |
-| Examples          | `make example`  | Compiles and runs `test/example.c`                           |
-| Memory check      | `make memcheck` | Runs Valgrind leak checks on tests, benchmarks, and examples |
-| Address sanitizer | `make asan`     | Builds and runs with AddressSanitizer enabled                |
-| UB sanitizer      | `make ubsan`    | Builds and runs with UndefinedBehaviorSanitizer enabled      |
-| Documentation     | `make doc`      | Generates Doxygen API docs into `doc/html/`                  |
-| Everything        | `make all`      | Runs `clean`, `test`, `bench`, `example`, and `doc`          |
+| Target            | Command            | What It Runs                                                 |
+|-------------------|--------------------|--------------------------------------------------------------|
+| Unit tests        | `make test`        | Compiles and runs `test/test_bptree.c`                       |
+| Lint              | `make lint`        | Runs `cppcheck` static analysis on the `test/` directory     |
+| Format check      | `make format`      | Formats all `.c` and `.h` files with `clang-format`          |
+| Benchmarks        | `make bench`       | Compiles and runs `test/bench_bptree.c`                      |
+| Examples          | `make example`     | Compiles and runs `test/example.c`                           |
+| Memory check      | `make memcheck`    | Runs Valgrind leak checks on tests, benchmarks, and examples |
+| Address sanitizer | `make asan`        | Builds and runs with AddressSanitizer enabled                |
+| UB sanitizer      | `make ubsan`       | Builds and runs with UndefinedBehaviorSanitizer enabled      |
+| Documentation     | `make doc`         | Generates Doxygen API docs into `doc/html/`                  |
+| Everything        | `make all`         | Runs `clean`, `test`, `bench`, `example`, and `doc`          |
+| Zig tests         | `make zig-test`    | Builds and runs tests via the Zig build system               |
+| Zig benchmarks    | `make zig-bench`   | Builds and runs benchmarks via the Zig build system          |
+| Zig example       | `make zig-example` | Builds and runs the example via the Zig build system         |
+| Zig release       | `make zig-release` | Builds all artifacts with Zig in ReleaseFast mode            |
 
 ## First Contribution Flow
 

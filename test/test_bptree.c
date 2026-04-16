@@ -1629,10 +1629,70 @@ void test_api_argument_validation(void) {
 }
 
 /**
+ * @brief Test: bptree_count, bptree_height, and bptree_clear (cross-mode).
+ *
+ * Verifies the O(1) accessor functions and the clear operation.
+ */
+void test_accessors_and_clear(void) {
+    bptree* tree = create_test_tree_with_order(5);
+    ASSERT(tree != NULL, "Tree creation failed");
+
+    // Empty tree.
+    ASSERT(bptree_count(tree) == 0, "Empty tree count should be 0");
+    ASSERT(bptree_height(tree) == 1, "Empty tree height should be 1");
+
+    // NULL safety.
+    ASSERT(bptree_count(NULL) == 0, "NULL tree count should be 0");
+    ASSERT(bptree_height(NULL) == 0, "NULL tree height should be 0");
+
+    // Insert elements and verify accessors.
+    const int N = 50;
+#ifdef BPTREE_KEY_TYPE_STRING
+    char buf[32];
+    for (int i = 0; i < N; i++) {
+        sprintf(buf, "ac%04d", i);
+        bptree_key_t k = KEY(buf);
+        bptree_put(tree, &k, NULL);
+    }
+#else
+    for (int i = 0; i < N; i++) {
+        bptree_key_t k = (bptree_key_t)i;
+        bptree_put(tree, &k, MAKE_VALUE_NUM(k));
+    }
+#endif
+    ASSERT(bptree_count(tree) == N, "Count should be %d after inserts, got %d", N,
+           bptree_count(tree));
+    ASSERT(bptree_height(tree) >= 1, "Height should be >= 1 after inserts");
+
+    // Clear and verify.
+    bptree_clear(tree);
+    ASSERT(bptree_count(tree) == 0, "Count should be 0 after clear");
+    ASSERT(bptree_height(tree) == 1, "Height should be 1 after clear");
+    ASSERT(bptree_check_invariants(tree), "Invariants should hold after clear");
+
+    // Verify tree is reusable after clear.
+#ifdef BPTREE_KEY_TYPE_STRING
+    {
+        bptree_key_t k = KEY("after_clear");
+        ASSERT(bptree_put(tree, &k, NULL) == BPTREE_OK, "Insert after clear should succeed");
+    }
+#else
+    {
+        bptree_key_t k = 999;
+        ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK,
+               "Insert after clear should succeed");
+    }
+#endif
+    ASSERT(bptree_count(tree) == 1, "Count should be 1 after re-insert");
+
+    bptree_free(tree);
+}
+
+/**
  * @brief Test: Basic iterator traversal (cross-mode, works with both key types).
  *
  * Inserts a small set of elements, iterates with begin/next/valid, and verifies
- * the count matches tree->count.
+ * the count matches bptree_count().
  */
 void test_iter_basic(void) {
     for (int m = 0; m < num_test_max_keys; m++) {
@@ -1750,6 +1810,7 @@ int main(void) {
 
     // Cross-mode tests
     RUN_TEST(test_api_argument_validation);
+    RUN_TEST(test_accessors_and_clear);
     RUN_TEST(test_iter_basic);
 
     // --- Test Summary ---

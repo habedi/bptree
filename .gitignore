@@ -146,3 +146,5 @@ perf.data
 *.folded
 *.perf
 core.*
+.claude/
+.codex

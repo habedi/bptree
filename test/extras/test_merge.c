@@ -49,11 +49,11 @@ int main() {
     print_tree_structure(tree->root, 0, max_keys);
     // Expected: Root[20, 30, 40] (Height reduced)
 
-    if (tree->height != 1) {
-        printf("FAIL: Height should be 1, got %d\n", tree->height);
+    if (bptree_height(tree) != 1) {
+        printf("FAIL: Height should be 1, got %d\n", bptree_height(tree));
     }
-    if (tree->count != 3) {
-        printf("FAIL: Count should be 3, got %d\n", tree->count);
+    if (bptree_count(tree) != 3) {
+        printf("FAIL: Count should be 3, got %d\n", bptree_count(tree));
     }
 
     bptree_free(tree);

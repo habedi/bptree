@@ -114,13 +114,13 @@ int main(int argc, char** argv) {
             exit(1);
         }
 
-        if (tree->count != count) {
-             printf("Count mismatch! Tree: %d, Expected: %d\n", tree->count, count);
+        if (bptree_count(tree) != count) {
+             printf("Count mismatch! Tree: %d, Expected: %d\n", bptree_count(tree), count);
              exit(1);
         }
     }
 
-    printf("Completed %d operations successfully. Final count: %d, Height: %d\n", operations, tree->count, tree->height);
+    printf("Completed %d operations successfully. Final count: %d, Height: %d\n", operations, bptree_count(tree), bptree_height(tree));
     bptree_free(tree);
     return 0;
 }

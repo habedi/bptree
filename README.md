@@ -90,6 +90,7 @@ To generate the documentation, use the `make doc` command and then open the `doc
 | `bptree_get_stats`          | `bptree_stats`  | Returns tree statistics, including key count, height, and node count of the tree.                                                                                                    |
 | `bptree_count`              | `int`           | Returns the number of key-value pairs in the tree. O(1).                                                                                                                             |
 | `bptree_height`             | `int`           | Returns the current height of the tree. O(1).                                                                                                                                        |
+| `bptree_max_keys`           | `int`           | Returns the maximum number of keys per node (as configured at creation). O(1).                                                                                                       |
 | `bptree_clear`              | `void`          | Removes all elements and resets the tree to an empty state. The tree can be reused. Values are not freed.                                                                            |
 | `bptree_check_invariants`   | `bool`          | Checks structural correctness of the B+ tree (e.g., key ordering, node fill levels, and leaf depth).                                                                                 |
 
@@ -109,7 +110,7 @@ To generate the documentation, use the `make doc` command and then open the `doc
 
 | Type             | Description                                                                                |
 |:-----------------|:-------------------------------------------------------------------------------------------|
-| `bptree`         | The main B+ tree data structure.                                                           |
+| `bptree`         | Opaque handle for a B+ tree. Access state through the accessor functions listed above.     |
 | `bptree_stats`   | The data type used for tree statistics (including key count, tree height, and node count). |
 | `bptree_iter`    | Forward iterator for traversing the tree in key order.                                     |
 | `bptree_key_t`   | The data type used for keys (configurable; default: `int64_t`).                            |

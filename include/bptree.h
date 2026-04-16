@@ -142,15 +142,16 @@ typedef struct bptree_stats {
 /**
  * @brief Forward iterator for traversing the B+ tree in key order.
  *
- * Iterators walk the leaf-level linked list from left to right.
- * An iterator is invalid (past-end) when its node pointer is NULL.
+ * The struct is exposed only so iterators can be declared as local values.
+ * Callers must treat the fields as opaque and interact with iterators
+ * exclusively through the `bptree_iter_*` functions.
  *
  * @warning Modifying the tree (insert/remove) invalidates all live iterators.
  */
 typedef struct bptree_iter {
-    const bptree* tree; /**< Back-pointer to the tree (for max_keys and compare) */
-    bptree_node* node;  /**< Current leaf node, or NULL for past-end */
-    int index;          /**< Position within the current leaf */
+    const bptree* tree; /**< Opaque: do not access directly. */
+    bptree_node* node;  /**< Opaque: do not access directly. */
+    int index;          /**< Opaque: do not access directly. */
 } bptree_iter;
 
 /*------------------------------------------------------------------------------

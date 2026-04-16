@@ -323,7 +323,7 @@ void test_deletion(void) {
             track_alloc(v);
             ASSERT(bptree_put(tree, &k, v) == BPTREE_OK, "Insert failed for key %s", key_buf);
         }
-        ASSERT(tree->count == N, "Count mismatch after insertion");
+        ASSERT(bptree_count(tree) == N, "Count mismatch after insertion");
 
         // Note: When removing, the caller is responsible for freeing the associated value memory.
         // This test doesn't retrieve/free the value, relying on cleanup_alloc_track later.
@@ -334,14 +334,14 @@ void test_deletion(void) {
             ASSERT(bptree_get(tree, &k_del, &res) == BPTREE_KEY_NOT_FOUND,
                    "Get succeeded for deleted key 'del3'");
         }
-        ASSERT(tree->count == N - 1, "Count mismatch after deletion");
+        ASSERT(bptree_count(tree) == N - 1, "Count mismatch after deletion");
 #else  // Numeric keys
         for (int i = 0; i < N; i++) {
             bptree_key_t k = (bptree_key_t)(i + 1);
             ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK,
                    "Insert failed for key %lld", (long long)k);
         }
-        ASSERT(tree->count == N, "Count mismatch after insertion");
+        ASSERT(bptree_count(tree) == N, "Count mismatch after insertion");
 
         bptree_key_t k_del = (bptree_key_t)4;
         ASSERT(bptree_remove(tree, &k_del) == BPTREE_OK, "Removal failed for key 4");
@@ -350,7 +350,7 @@ void test_deletion(void) {
             ASSERT(bptree_get(tree, &k_del, &res) == BPTREE_KEY_NOT_FOUND,
                    "Get succeeded for deleted key 4");
         }
-        ASSERT(tree->count == N - 1, "Count mismatch after deletion");
+        ASSERT(bptree_count(tree) == N - 1, "Count mismatch after deletion");
 #endif
         ASSERT(bptree_check_invariants(tree) == true, "Invariants check failed after delete");
         bptree_free(tree);
@@ -646,7 +646,7 @@ void test_mixed_insert_delete(void) {
         }
         ASSERT(bptree_check_invariants(tree) == true,
                "Invariants check failed after initial mixed insert");
-        ASSERT(tree->count == N, "Count mismatch after initial insert");
+        ASSERT(bptree_count(tree) == N, "Count mismatch after initial insert");
 
         // --- Phase 2: Delete even keys ---
         for (int i = 2; i <= N; i += 2) {
@@ -669,8 +669,9 @@ void test_mixed_insert_delete(void) {
                    "Mixed delete (even) failed for key %lld", (long long)key);
 #endif
         }
-        ASSERT(tree->count == N / 2, "Count mismatch after deleting evens: expected %d, got %d",
-               N / 2, tree->count);
+        ASSERT(bptree_count(tree) == N / 2,
+               "Count mismatch after deleting evens: expected %d, got %d", N / 2,
+               bptree_count(tree));
 
         // --- Phase 3: Check remaining odd keys ---
         for (int i = 1; i <= N; i += 2) {
@@ -721,9 +722,9 @@ void test_mixed_insert_delete(void) {
                 ASSERT(false, "Unexpected deletion status (%d) for key index %d", st, i);
             }
         }
-        ASSERT(tree->count == expected_final_count,
+        ASSERT(bptree_count(tree) == expected_final_count,
                "Count mismatch after deleting 1-mod-3 keys: expected %d, got %d",
-               expected_final_count, tree->count);
+               expected_final_count, bptree_count(tree));
         ASSERT(bptree_check_invariants(tree) == true,
                "Invariants check failed after final mixed delete stage");
 
@@ -898,7 +899,7 @@ void test_stress(void) {
             ASSERT(bptree_put(tree, &k, v) == BPTREE_OK, "Stress insert failed for key %s",
                    key_buf);
         }
-        ASSERT(tree->count == N, "Count mismatch after stress insert");
+        ASSERT(bptree_count(tree) == N, "Count mismatch after stress insert");
         ASSERT(bptree_check_invariants(tree) == true, "Invariants failed after stress insert");
 
         // Phase 2: Retrieve N items
@@ -917,7 +918,7 @@ void test_stress(void) {
             ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK,
                    "Stress insert failed for key %lld", (long long)k);
         }
-        ASSERT(tree->count == N, "Count mismatch after stress insert");
+        ASSERT(bptree_count(tree) == N, "Count mismatch after stress insert");
         ASSERT(bptree_check_invariants(tree) == true, "Invariants failed after stress insert");
 
         // Phase 2: Retrieve N items
@@ -973,7 +974,7 @@ void test_deletion_and_merge_stress(void) {
                    "Stress delete setup: invariants failed after inserting %d", i);
         }
     }
-    ASSERT(tree->count == N, "Count mismatch after insertion phase of stress delete test");
+    ASSERT(bptree_count(tree) == N, "Count mismatch after insertion phase of stress delete test");
     ASSERT(bptree_check_invariants(tree), "Invariants failed after full insertion phase");
 
     // --- Phase 2: Create a shuffled list of keys to delete ---
@@ -1001,8 +1002,8 @@ void test_deletion_and_merge_stress(void) {
                (long long)k, i);
     }
 
-    ASSERT(tree->count == N - D, "Count mismatch after deletions. Expected %d, got %d", N - D,
-           tree->count);
+    ASSERT(bptree_count(tree) == N - D, "Count mismatch after deletions. Expected %d, got %d",
+           N - D, bptree_count(tree));
 
     // --- Phase 4: Verify remaining keys are still present ---
     for (int i = D; i < N; i++) {
@@ -1087,7 +1088,7 @@ void test_minimum_max_keys(void) {
     const int min_max_keys = 3;  // Minimum allowed value
     bptree* tree = bptree_create(min_max_keys, NULL, global_debug_enabled);
     ASSERT(tree != NULL, "Failed to create tree with min_max_keys=3");
-    ASSERT(tree->max_keys == min_max_keys, "max_keys not set correctly");
+    ASSERT(bptree_max_keys(tree) == min_max_keys, "max_keys not set correctly");
 
     // Test extensive insertions to force multiple splits with minimum node size
     const int num_keys = 100;
@@ -1097,7 +1098,7 @@ void test_minimum_max_keys(void) {
         ASSERT(st == BPTREE_OK, "Insertion failed at key %d with min_max_keys", i);
     }
 
-    ASSERT(tree->count == num_keys, "Count mismatch after insertions with min_max_keys");
+    ASSERT(bptree_count(tree) == num_keys, "Count mismatch after insertions with min_max_keys");
     ASSERT(bptree_check_invariants(tree), "Invariants failed after insertions with min_max_keys");
 
     // Test deletions that force merges with minimum node size
@@ -1107,7 +1108,7 @@ void test_minimum_max_keys(void) {
         ASSERT(st == BPTREE_OK, "Deletion failed at key %d with min_max_keys", i * 2);
     }
 
-    ASSERT(tree->count == num_keys / 2, "Count incorrect after deletions with min_max_keys");
+    ASSERT(bptree_count(tree) == num_keys / 2, "Count incorrect after deletions with min_max_keys");
     ASSERT(bptree_check_invariants(tree), "Invariants failed after deletions with min_max_keys");
 
     // Verify remaining keys are still accessible
@@ -1149,7 +1150,7 @@ void test_very_large_tree(void) {
         if ((i + 1) % 10000 == 0) {
             ASSERT(bptree_check_invariants(tree),
                    "Invariants failed after %d insertions in large tree", i + 1);
-            fprintf(stderr, "  [%d keys inserted, height=%d]\n", i + 1, tree->height);
+            fprintf(stderr, "  [%d keys inserted, height=%d]\n", i + 1, bptree_height(tree));
         }
     }
 
@@ -1228,18 +1229,18 @@ void test_enhanced_random_stress(void) {
         }
 
         // Verify tree count matches our tracking
-        ASSERT(tree->count == inserted_count, "Count mismatch at op %d: tree=%d, tracked=%d", op,
-               tree->count, inserted_count);
+        ASSERT(bptree_count(tree) == inserted_count, "Count mismatch at op %d: tree=%d, tracked=%d",
+               op, bptree_count(tree), inserted_count);
 
         // Periodic invariant checks
         if ((op + 1) % 1000 == 0) {
             ASSERT(bptree_check_invariants(tree),
                    "Invariants failed at operation %d in enhanced stress test", op + 1);
-            fprintf(stderr, "  [%d operations completed, count=%d]\n", op + 1, tree->count);
+            fprintf(stderr, "  [%d operations completed, count=%d]\n", op + 1, bptree_count(tree));
         }
     }
 
-    fprintf(stderr, "  [Final count: %d]\n", tree->count);
+    fprintf(stderr, "  [Final count: %d]\n", bptree_count(tree));
     ASSERT(bptree_check_invariants(tree), "Final invariants check failed in enhanced stress test");
 
     bptree_free(tree);
@@ -1265,7 +1266,7 @@ void test_rebalancing_stress_patterns(void) {
         ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK,
                "Insert failed in pattern 1 at key %d", i);
     }
-    ASSERT(tree->count == pattern1_count, "Count wrong after pattern 1 inserts");
+    ASSERT(bptree_count(tree) == pattern1_count, "Count wrong after pattern 1 inserts");
 
     for (int i = pattern1_count - 1; i >= 0; i--) {
         bptree_key_t k = (bptree_key_t)i;
@@ -1276,7 +1277,7 @@ void test_rebalancing_stress_patterns(void) {
                    "Invariants failed during pattern 1 deletes at key %d", i);
         }
     }
-    ASSERT(tree->count == 0, "Tree not empty after pattern 1");
+    ASSERT(bptree_count(tree) == 0, "Tree not empty after pattern 1");
     ASSERT(bptree_check_invariants(tree), "Invariants failed after pattern 1");
 
     // Pattern 2: Alternating boundaries
@@ -1337,7 +1338,7 @@ void test_delete_all_keys(void) {
             bptree_key_t k = (bptree_key_t)i;
             bptree_put(tree, &k, MAKE_VALUE_NUM(k));
         }
-        ASSERT(tree->count == N, "Insert count wrong for order %d", order);
+        ASSERT(bptree_count(tree) == N, "Insert count wrong for order %d", order);
 
         // Delete all keys one by one and verify invariants after each.
         for (int i = 0; i < N; i++) {
@@ -1348,8 +1349,8 @@ void test_delete_all_keys(void) {
                    "Invariants failed after deleting key %d (order %d)", i, order);
         }
 
-        ASSERT(tree->count == 0, "Tree not empty after deleting all (order %d)", order);
-        ASSERT(tree->height == 1, "Height not 1 after deleting all (order %d)", order);
+        ASSERT(bptree_count(tree) == 0, "Tree not empty after deleting all (order %d)", order);
+        ASSERT(bptree_height(tree) == 1, "Height not 1 after deleting all (order %d)", order);
         ASSERT(tree->root->is_leaf, "Root not leaf after deleting all (order %d)", order);
 
         bptree_free(tree);
@@ -1385,8 +1386,8 @@ void test_delete_all_reverse(void) {
                    "Invariants failed after reverse delete key %d (order %d)", i, order);
         }
 
-        ASSERT(tree->count == 0, "Tree not empty after reverse delete (order %d)", order);
-        ASSERT(tree->height == 1, "Height not 1 after reverse delete (order %d)", order);
+        ASSERT(bptree_count(tree) == 0, "Tree not empty after reverse delete (order %d)", order);
+        ASSERT(bptree_height(tree) == 1, "Height not 1 after reverse delete (order %d)", order);
         bptree_free(tree);
     }
 }
@@ -1748,7 +1749,7 @@ int main(void) {
             printf("API Usage Check: Created tree with max_keys = 5 (string keys).\n");
             ASSERT(bptree_contains(tree, (bptree_key_t[]){KEY("example")}) == false,
                    "Contains on empty tree failed");
-            ASSERT(tree->count == 0, "Initial count non-zero");
+            ASSERT(bptree_count(tree) == 0, "Initial count non-zero");
             bptree_free(tree);
         } else {
             fprintf(stderr, "API usage check: string tree creation failed.\n");
@@ -1763,7 +1764,7 @@ int main(void) {
             printf("API Usage Check: Created tree with max_keys = 5 (numeric keys).\n");
             const bptree_key_t example = 69;
             ASSERT(bptree_contains(tree, &example) == false, "Contains on empty tree failed");
-            ASSERT(tree->count == 0, "Initial count non-zero");
+            ASSERT(bptree_count(tree) == 0, "Initial count non-zero");
             bptree_free(tree);
         } else {
             fprintf(stderr, "API usage check: numeric tree creation failed.\n");

@@ -214,4 +214,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to make a contribution
 
 ### License
 
-Bptree is licensed under the MIT License ([LICENSE](LICENSE)).
+Bptree is licensed under the MIT License (see [LICENSE](LICENSE)).

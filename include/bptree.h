@@ -122,20 +122,13 @@ typedef enum {
 typedef struct bptree_node bptree_node;
 
 /**
- * @brief B+ tree structure.
+ * @brief Opaque B+ tree handle.
  *
- * Represents the B+ tree and holds its configuration along with the root pointer.
+ * Obtained from bptree_create() and released with bptree_free().
+ * The full definition is only available when BPTREE_IMPLEMENTATION is defined;
+ * external consumers must access the tree exclusively through the public API.
  */
-typedef struct bptree {
-    int count;             /**< Total number of key/value pairs in the tree */
-    int height;            /**< Current height of the tree */
-    bool enable_debug;     /**< If true, debug messages will be printed */
-    int max_keys;          /**< Maximum number of keys allowed in any node */
-    int min_leaf_keys;     /**< Minimum keys needed in a non-root leaf node */
-    int min_internal_keys; /**< Minimum keys needed in a non-root internal node */
-    int (*compare)(const bptree_key_t*, const bptree_key_t*); /**< Function to compare two keys */
-    bptree_node* root; /**< Pointer to the root node of the tree */
-} bptree;
+typedef struct bptree bptree;
 
 /**
  * @brief B+ tree statistics.
@@ -283,6 +276,16 @@ BPTREE_API int bptree_count(const bptree* tree);
 BPTREE_API int bptree_height(const bptree* tree);
 
 /**
+ * @brief Returns the maximum number of keys a node can hold.
+ *
+ * Reports the value passed to bptree_create(). This is an O(1) operation.
+ *
+ * @param tree Pointer to the B+ tree.
+ * @return The configured max_keys value, or 0 if tree is NULL.
+ */
+BPTREE_API int bptree_max_keys(const bptree* tree);
+
+/**
  * @brief Removes all elements from the tree.
  *
  * Frees all internal nodes and resets the tree to an empty state.
@@ -411,6 +414,24 @@ BPTREE_API bptree_iter bptree_iter_upper_bound(const bptree* tree, const bptree_
 /*==============================================================================
  * Internal Types
  *============================================================================*/
+
+/**
+ * @brief Internal B+ tree structure.
+ *
+ * This definition is only available when BPTREE_IMPLEMENTATION is defined.
+ * External consumers must use the public API (bptree_count, bptree_height,
+ * bptree_max_keys, bptree_get_stats, etc.) to inspect tree state.
+ */
+struct bptree {
+    int count;             /**< Total number of key/value pairs in the tree */
+    int height;            /**< Current height of the tree */
+    bool enable_debug;     /**< If true, debug messages will be printed */
+    int max_keys;          /**< Maximum number of keys allowed in any node */
+    int min_leaf_keys;     /**< Minimum keys needed in a non-root leaf node */
+    int min_internal_keys; /**< Minimum keys needed in a non-root internal node */
+    int (*compare)(const bptree_key_t*, const bptree_key_t*); /**< Function to compare two keys */
+    bptree_node* root; /**< Pointer to the root node of the tree */
+};
 
 /**
  * @brief Internal B+ tree node.
@@ -1540,6 +1561,8 @@ BPTREE_API bptree_stats bptree_get_stats(const bptree* tree) {
 BPTREE_API int bptree_count(const bptree* tree) { return tree ? tree->count : 0; }
 
 BPTREE_API int bptree_height(const bptree* tree) { return tree ? tree->height : 0; }
+
+BPTREE_API int bptree_max_keys(const bptree* tree) { return tree ? tree->max_keys : 0; }
 
 BPTREE_API void bptree_clear(bptree* tree) {
     if (!tree) return;

@@ -117,9 +117,8 @@ static const char* status_to_string(const bptree_status status) {
  *
  * This function specifically handles the case where the tree stores pointers
  * to dynamically allocated `record_t` structs (as defined by `BPTREE_VALUE_TYPE`).
- * It iterates through all leaf nodes, retrieves the stored pointers, frees the
- * memory pointed to by them, and finally calls `bptree_free()` to release the
- * tree's internal node memory.
+ * It walks the tree with `bptree_iter_*`, frees each stored pointer, and finally
+ * calls `bptree_free()` to release the tree's internal node memory.
  *
  * @param tree Pointer to the B+ tree to clean up.
  * @warning This function assumes `bptree_value_t` is `record_t*` and that
@@ -131,70 +130,30 @@ static void cleanup_records_and_tree(bptree* tree) {
         printf("Tree pointer is NULL. Nothing to clean up.\n");
         return;
     }
-    if (!tree->root) {
-        fprintf(stderr, "Warning: Tree has no root node.\n");
-        free(tree);  // Free tree struct itself if root is null
-        return;
-    }
 
-    // Only iterate if there are records potentially stored
-    if (tree->count > 0) {
-        printf("Iterating through leaves to free %d records...\n", tree->count);
-        // 1. Find the first leaf node
-        bptree_node* leaf = tree->root;
-        while (leaf && !leaf->is_leaf) {
-            bptree_node** children = bptree_node_children(leaf, tree->max_keys);
-            // Descend to the leftmost child
-            if (leaf->num_keys >= 0 && children && children[0]) {
-                leaf = children[0];
-            } else {
-                fprintf(stderr,
-                        "Error: Corrupted internal node or missing child[0] during cleanup "
-                        "traversal.\n");
-                leaf = NULL;  // Stop traversal
-                break;
+    const int tree_count = bptree_count(tree);
+    if (tree_count > 0) {
+        printf("Iterating through entries to free %d records...\n", tree_count);
+        int freed_count = 0;
+        for (bptree_iter it = bptree_iter_begin(tree); bptree_iter_valid(&it);
+             bptree_iter_next(&it)) {
+            record_t* rec_ptr = (record_t*)bptree_iter_value(&it);
+            if (rec_ptr) {
+                free(rec_ptr);
+                freed_count++;
             }
         }
-
-        if (!leaf) {
-            fprintf(
-                stderr,
-                "Error: Could not find the first leaf node for cleanup. Records may be leaked.\n");
-        } else {
-            // 2. Iterate through all leaf nodes using the 'next' pointer
-            int freed_count = 0;
-            bptree_node* current_leaf = leaf;
-            while (current_leaf) {
-                assert(current_leaf->is_leaf);  // Should always be leaf here
-                const bptree_value_t* values = bptree_node_values(current_leaf, tree->max_keys);
-                for (int i = 0; i < current_leaf->num_keys; i++) {
-                    record_t* rec_ptr = (record_t*)values[i];  // Cast from bptree_value_t
-                    if (rec_ptr) {
-                        free(rec_ptr);  // Free the actual record_t struct
-                        freed_count++;
-                    } else {
-                        // Note: Depending on usage, NULL values might be valid.
-                        // fprintf(stderr, "Warning: Found NULL record pointer in leaf node during
-                        // cleanup.\n");
-                    }
-                }
-                current_leaf = current_leaf->next;
-            }
-            printf("Freed %d record structs.\n", freed_count);
-            // Check if the number freed matches the tree's count (might differ if NULLs were
-            // stored)
-            if (freed_count != tree->count) {
-                fprintf(stderr,
-                        "Warning: Number of freed records (%d) may not match tree count (%d) if "
-                        "NULL values were stored.\n",
-                        freed_count, tree->count);
-            }
+        printf("Freed %d record structs.\n", freed_count);
+        if (freed_count != tree_count) {
+            fprintf(stderr,
+                    "Warning: Number of freed records (%d) may not match tree count (%d) if "
+                    "NULL values were stored.\n",
+                    freed_count, tree_count);
         }
     } else {
         printf("Tree is empty, no records to free.\n");
     }
 
-    // 3. Free the tree structure itself (nodes are freed recursively)
     bptree_free(tree);
     printf("B+ Tree structure freed.\n");
 }
@@ -224,7 +183,7 @@ int main(void) {
         fprintf(stderr, "Error: failed to create B+ tree\n");
         return EXIT_FAILURE;
     }
-    printf("B+ Tree created (max_keys=%d).\n", tree->max_keys);
+    printf("B+ Tree created (max_keys=%d).\n", bptree_max_keys(tree));
 
     // Array to hold pointers to allocated records for easier cleanup on error
     // Note: Size needs to be sufficient for all potential allocations before cleanup/removal
@@ -584,8 +543,7 @@ int main(void) {
         const bptree_stats stats = bptree_get_stats(tree);
         printf("Tree stats: count=%d, height=%d, node_count=%d\n", stats.count, stats.height,
                stats.node_count);
-        printf("Final tree size should be %d records.\n",
-               tree->count);  // Use tree's internal count
+        printf("Final tree size should be %d records.\n", bptree_count(tree));
     }
 
     // --- Cleanup ---

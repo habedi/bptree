@@ -236,8 +236,8 @@ int main(void) {
             exit(EXIT_FAILURE);
         }
     }
-    printf("Tree populated with %d items.\n", test_tree->count);
-    assert(test_tree->count == N);
+    printf("Tree populated with %d items.\n", bptree_count(test_tree));
+    assert(bptree_count(test_tree) == N);
 
     // --- Benchmark: Random Search ---
     memcpy(keys_copy, keys_array, N * sizeof(bptree_key_t));
@@ -258,27 +258,25 @@ int main(void) {
         assert(res == pointers[bench_i]);
     });
 
-    // --- Benchmark: Leaf Iteration ---
+    // --- Benchmark: Iterator Traversal ---
     int iter_total = 0;
     int iterations = (N > 10000) ? 100 : 1000;
     printf("Running iterator benchmark with %d iterations...\n", iterations);
     BENCH("Iterator", iterations, {
-        bptree_node* leaf = test_tree->root;  // Use the already populated test_tree
-        while (leaf && !leaf->is_leaf) {
-            leaf = bptree_node_children(leaf, test_tree->max_keys)[0];
-        }
         int count = 0;
-        for (bptree_node* cur = leaf; cur != NULL; cur = cur->next) {
-            count += cur->num_keys;
+        for (bptree_iter it = bptree_iter_begin(test_tree); bptree_iter_valid(&it);
+             bptree_iter_next(&it)) {
+            count++;
         }
         iter_total += count;
     });
-    if (iter_total != iterations * test_tree->count) {
+    const int tree_count = bptree_count(test_tree);
+    if (iter_total != iterations * tree_count) {
         fprintf(stderr, "Iterator Warning: Total iterated %d != expected %d\n", iter_total,
-                iterations * test_tree->count);
+                iterations * tree_count);
     }
     printf("Total iterated elements over %d iterations: %d (expected %d per iteration)\n",
-           iterations, iter_total, test_tree->count);
+           iterations, iter_total, tree_count);
 
     // --- Benchmark: Range Search (Variations) ---
     printf("Running range search benchmarks...\n");
@@ -404,21 +402,21 @@ int main(void) {
         const bptree_status stat = bptree_remove(test_tree, &keys_array[idx]);
         assert(stat == BPTREE_OK);
     });
-    assert(test_tree->count == 0);
+    assert(bptree_count(test_tree) == 0);
     // Re-populate test_tree for sequential deletion
     printf("Re-populating tree for sequential delete test...\n");
     for (int i = 0; i < N; i++) {
         const bptree_status stat = bptree_put(test_tree, &keys_array[i], pointers[i]);
         assert(stat == BPTREE_OK);
     }
-    assert(test_tree->count == N);
+    assert(bptree_count(test_tree) == N);
 
     // --- Benchmark: Sequential Deletion ---
     BENCH("Deletion (seq)", N, {
         const bptree_status stat = bptree_remove(test_tree, &keys_array[bench_i]);
         assert(stat == BPTREE_OK);
     });
-    assert(test_tree->count == 0);
+    assert(bptree_count(test_tree) == 0);
 
     // Free the main test tree used for search/delete/range
     bptree_free(test_tree);

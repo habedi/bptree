@@ -35,7 +35,8 @@ Priorities, in order:
 ## Repository Layout
 
 - `include/bptree.h`: Single-header library. Public API declarations are at the top; the implementation is guarded by
-  `#ifdef BPTREE_IMPLEMENTATION`. Internal types (e.g., `bptree_node`) are defined only inside that guard.
+  `#ifdef BPTREE_IMPLEMENTATION`. Internal types (`bptree`, `bptree_node`) are defined only inside that guard;
+  external consumers must treat them as opaque and access tree state through the public accessor functions.
 - `test/test_bptree.c`: Unit test suite using a custom test harness (`ASSERT`, `RUN_TEST` macros).
 - `test/bench_bptree.c`: Performance benchmarks for insertions, searches, deletions, iteration, and range queries.
 - `test/example.c`: Example usage demonstrating tree creation, CRUD operations, range queries, and custom comparators.

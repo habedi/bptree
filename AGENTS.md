@@ -21,8 +21,7 @@ Priorities, in order:
 - Prefer small, focused changes over large refactoring.
 - Add comments only when they clarify non-obvious behavior.
 - Do not add features, error handling, or abstractions beyond what is needed for the current task.
-- Keep the project dependency-free: no external C libraries unless explicitly agreed. The only dependencies are the C11
-  standard library headers.
+- Keep the project dependency-free: no external C libraries unless explicitly agreed. The only dependencies are the C11 standard library headers.
 
 ## Writing Style
 
@@ -30,19 +29,18 @@ Priorities, in order:
 - Do not use em dashes. Restructure the sentence, or use a colon or semicolon instead.
 - Avoid colorful adjectives and adverbs. Write "B+ tree" not "lightweight B+ tree", "range query" not "efficient range query".
 - Use noun phrases for checklist items, not imperative verbs. Write "node merge logic" not "merge nodes".
-- Headings in Markdown files must be in the title case: "Build from Source" not "Build from source". Minor words (a, an, the,
-  and, but, or, for, in, on, at, to, by, of, is, are, was, were, be) stay lowercase unless they are the first word.
+- Headings in Markdown files must be in the title case: "Build from Source" not "Build from source". Minor words (a, an, the, and, but, or, for, in,
+  on, at, to, by, of, is, are, was, were, be) stay lowercase unless they are the first word.
 
 ## Repository Layout
 
-- `include/bptree.h`: Single-header library. Contains both the public API declarations and the implementation (guarded by
-  `BPTREE_IMPLEMENTATION`). This is the only source file that ships to users.
+- `include/bptree.h`: Single-header library. Contains both the public API declarations and the implementation (guarded by `BPTREE_IMPLEMENTATION`).
+  This is the only source file that ships to users.
 - `test/test_bptree.c`: Unit test suite using a custom test harness (`ASSERT`, `RUN_TEST` macros).
 - `test/bench_bptree.c`: Performance benchmarks for insertions, searches, deletions, iteration, and range queries.
 - `test/example.c`: Example usage demonstrating tree creation, CRUD operations, range queries, and custom comparators.
 - `test/extras/`: Additional test files for specific scenarios (merge operations, bug reproductions, string keys).
-- `.github/workflows/`: CI workflows (`tests.yml` for unit tests and coverage, `lints.yml` for static analysis, `benches.yml`
-  for benchmarks).
+- `.github/workflows/`: CI workflows (`tests.yml` for unit tests and coverage, `lints.yml` for static analysis, `benches.yml` for benchmarks).
 - `Makefile`: GNU Make build automation with targets for building, testing, linting, formatting, profiling, and more.
 - `.clang-format`: Code formatting rules (Google base style, 4-space indent, 100-column limit).
 - `Doxyfile`: Doxygen configuration for API documentation generation.

@@ -44,7 +44,7 @@ They are mainly used for ordered data access and range queries as part of a larg
 - Forward iterator with `find`, `lower_bound`, and `upper_bound`
 - Allows the user to manage memory for values
 - Compatible with C11 or newer
-- Builds with Make (with a C compiler like GCC or Clang) or Zig build system
+- Builds with Make (with a C compiler like GCC or Clang) or [Zig build system](https://ziglang.org/learn/build-system/)
 
 ---
 

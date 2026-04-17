@@ -185,24 +185,24 @@ To use fixed-size string keys (like 32-character strings) and store integer IDs 
 #include "bptree.h"
 ```
 
-### Building with Zig
+### Tests and Benchmarks
 
-As an alternative to Make, the project can be built with [Zig](https://ziglang.org)'s build system.
+To run the tests and benchmarks, use `make test` and `make bench`.
+
+| File                                  | Description                                                     |
+|:--------------------------------------|:----------------------------------------------------------------|
+| [test_bptree.c](test/test_bptree.c)   | Unit tests for the B+ tree API.                                 |
+| [bench_bptree.c](test/bench_bptree.c) | Benchmarks for some of the operations supported by the B+ tree. |
+
+### Using Zig Build System
+
+Alternatively, you can use the Zig build system to build and run the tests, benchmarks, and the example program.
 
 ```shell
 zig build test      # Build and run unit tests
 zig build bench     # Build and run benchmarks
 zig build example   # Build and run the example
 ```
-
-### Tests and Benchmarks
-
-To run the tests and benchmarks, use `make test` and `make bench` (or `zig build test` and `zig build bench`).
-
-| File                                  | Description                                                     |
-|:--------------------------------------|:----------------------------------------------------------------|
-| [test_bptree.c](test/test_bptree.c)   | Unit tests for the B+ tree API.                                 |
-| [bench_bptree.c](test/bench_bptree.c) | Benchmarks for some of the operations supported by the B+ tree. |
 
 -----
 

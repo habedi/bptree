@@ -11,7 +11,7 @@
 [![Lints](https://img.shields.io/github/actions/workflow/status/habedi/bptree/lints.yml?label=lints&style=flat&labelColor=282c34&logo=github)](https://github.com/habedi/bptree/actions/workflows/lints.yml)
 [![Benchmarks](https://img.shields.io/github/actions/workflow/status/habedi/bptree/benches.yml?label=benches&style=flat&labelColor=282c34&logo=github)](https://github.com/habedi/bptree/actions/workflows/benches.yml)
 [![Code Coverage](https://img.shields.io/codecov/c/github/habedi/bptree?label=coverage&style=flat&labelColor=282c34&logo=codecov)](https://codecov.io/gh/habedi/bptree)
-[![Zig](https://img.shields.io/badge/zig-0.16.0-F7A41D?style=flat&labelColor=282c34&logo=zig)](https://ziglang.org/download/)
+[![Zig](https://img.shields.io/badge/zig-0.15.2-F7A41D?style=flat&labelColor=282c34&logo=zig)](https://ziglang.org/download/)
 [![License](https://img.shields.io/badge/license-MIT-007ec6?label=license&style=flat&labelColor=282c34&logo=open-source-initiative)](https://github.com/habedi/bptree/blob/main/LICENSE)
 [![Release](https://img.shields.io/github/release/habedi/bptree.svg?label=release&style=flat&labelColor=282c34&logo=github)](https://github.com/habedi/bptree/releases/latest)
 
@@ -44,7 +44,7 @@ They are mainly used for ordered data access and range queries as part of a larg
 - Forward iterator with `find`, `lower_bound`, and `upper_bound`
 - Allows the user to manage memory for values
 - Compatible with C11 or newer
-- Builds with Make (with a C compiler like GCC or Clang) or Zig build system
+- Builds with Make (with a C compiler like GCC or Clang) or [Zig build system](https://ziglang.org/learn/build-system/)
 
 ---
 
@@ -185,26 +185,24 @@ To use fixed-size string keys (like 32-character strings) and store integer IDs 
 #include "bptree.h"
 ```
 
-### Building with Zig
-
-As an alternative to Make, the project can be built with [Zig](https://ziglang.org)'s build system.:
-
-```shell
-zig build test      # Build and run unit tests
-zig build bench     # Build and run benchmarks
-zig build example   # Build and run the example
-```
-
-Zig build targets are also available through Make: `make zig-test`, `make zig-bench`, `make zig-example`.
-
 ### Tests and Benchmarks
+
+To run the tests and benchmarks, use `make test` and `make bench`.
 
 | File                                  | Description                                                     |
 |:--------------------------------------|:----------------------------------------------------------------|
 | [test_bptree.c](test/test_bptree.c)   | Unit tests for the B+ tree API.                                 |
 | [bench_bptree.c](test/bench_bptree.c) | Benchmarks for some of the operations supported by the B+ tree. |
 
-To run the tests and benchmarks, use `make test` and `make bench` (or `zig build test` and `zig build bench`).
+### Using Zig Build System
+
+Alternatively, you can use the Zig build system to build and run the tests, benchmarks, and the example program.
+
+```shell
+zig build test      # Build and run unit tests
+zig build bench     # Build and run benchmarks
+zig build example   # Build and run the example
+```
 
 -----
 

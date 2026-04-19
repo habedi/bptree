@@ -2,7 +2,7 @@
     .name = .bptree,
     .version = "0.5.0",
     .fingerprint = 0x9b566efd5477f040, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.15.2",
     .paths = .{
         "build.zig",
         "build.zig.zon",

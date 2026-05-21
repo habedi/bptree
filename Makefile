@@ -52,7 +52,7 @@ else
 endif
 
 # Combine flags
-CFLAGS := $(CFLAGS_BASE) $(CFLAGS_SAN) $(CFLAGS_TYPE)
+CFLAGS = $(CFLAGS_BASE) $(CFLAGS_SAN) $(CFLAGS_TYPE)
 
 # Binary names
 TEST_BINARY    := $(BIN_DIR)/test_bptree
@@ -90,6 +90,7 @@ test: $(TEST_BINARY) ## Build and run tests
 	./$(TEST_BINARY)
 
 .PHONY: bench
+bench: CFLAGS_TYPE=-O2 -DNDEBUG
 bench: $(BENCH_BINARY) ## Build and run benchmarks
 	@echo "Running benchmarks..."
 	./$(BENCH_BINARY)
@@ -240,6 +241,7 @@ zig-test: ## Build and run tests using Zig
 	$(ZIG) build test $(ZIG_BUILD_OPTS) -j$(JOBS)
 
 .PHONY: zig-bench
+zig-bench: ZIG_OPTIMIZE=ReleaseFast
 zig-bench: ## Build and run benchmarks using Zig
 	$(check_zig)
 	@echo "Running benchmarks (Zig build)..."

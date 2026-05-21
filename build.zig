@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) void {
     };
 
     // --- Library header installation ---
-    // `zig build` (default step) installs the header to zig-out/include/.
+    // `zig build` (default step) installs the header to `zig-out/include/`.
 
     const install_header = b.addInstallFileWithDir(
         b.path("include/bptree.h"),
@@ -36,21 +36,21 @@ pub fn build(b: *std.Build) void {
 
     // --- Top-level steps ---
 
-    // `zig build test` — build and run the unit tests.
+    // `zig build test` build and run the unit tests
     const test_step = b.step("test", "Build and run unit tests");
     const run_tests = b.addRunArtifact(test_exe);
     run_tests.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_tests.addArgs(args);
     test_step.dependOn(&run_tests.step);
 
-    // `zig build bench` — build and run the benchmarks.
+    // `zig build bench` build and run the benchmarks
     const bench_step = b.step("bench", "Build and run benchmarks");
     const run_bench = b.addRunArtifact(bench_exe);
     run_bench.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_bench.addArgs(args);
     bench_step.dependOn(&run_bench.step);
 
-    // `zig build example` — build and run the example program.
+    // `zig build example` build and run the example program
     const example_step = b.step("example", "Build and run the example program");
     const run_example = b.addRunArtifact(example_exe);
     run_example.step.dependOn(b.getInstallStep());

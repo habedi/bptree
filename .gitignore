@@ -150,3 +150,5 @@ core.*
 .codex
 .zig-cache/
 zig-out/
+zig-pkg/
+.agents/

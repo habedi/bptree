@@ -188,6 +188,7 @@ To use fixed-size string keys (like 32-character strings) and store integer IDs 
 ### Tests and Benchmarks
 
 To run the tests and benchmarks, use `make test` and `make bench`.
+Note that the benchmark target builds with release optimizations.
 
 | File                                  | Description                                                     |
 |:--------------------------------------|:----------------------------------------------------------------|

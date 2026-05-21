@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) void {
     // --- Executables ---
 
     const test_exe = addCExe(b, "test_bptree", "test/test_bptree.c", target, optimize, c_flags);
-    const bench_exe = addCExe(b, "bench_bptree", "test/bench_bptree.c", target, optimize, c_flags);
+    const bench_exe = addCExe(b, "bench_bptree", "test/bench_bptree.c", target, .ReleaseFast, c_flags);
     const example_exe = addCExe(b, "example", "test/example.c", target, optimize, c_flags);
 
     // Install all executables so `zig build` puts them in zig-out/bin/.

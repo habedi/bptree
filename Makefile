@@ -52,7 +52,7 @@ else
 endif
 
 # Combine flags
-CFLAGS := $(CFLAGS_BASE) $(CFLAGS_SAN) $(CFLAGS_TYPE)
+CFLAGS = $(CFLAGS_BASE) $(CFLAGS_SAN) $(CFLAGS_TYPE)
 
 # Binary names
 TEST_BINARY    := $(BIN_DIR)/test_bptree
@@ -90,7 +90,7 @@ test: $(TEST_BINARY) ## Build and run tests
 	./$(TEST_BINARY)
 
 .PHONY: bench
-bench: BUILD_TYPE=release
+bench: CFLAGS_TYPE=-O2 -DNDEBUG
 bench: $(BENCH_BINARY) ## Build and run benchmarks
 	@echo "Running benchmarks..."
 	./$(BENCH_BINARY)

@@ -17,7 +17,7 @@ ASSET_DIR := assets
 # ################################################################################
 # # Zig Build System Configuration
 # ################################################################################
-ZIG_LOCAL     := $(HOME)/.local/share/zig/0.16.0/zig
+ZIG_LOCAL     := $(HOME)/.local/share/zig/0.17.0/zig
 ZIG           ?= $(shell test -x $(ZIG_LOCAL) && echo $(ZIG_LOCAL) || which zig 2>/dev/null || echo "")
 ZIG_OPTIMIZE  ?= Debug
 ZIG_BUILD_OPTS ?= -Doptimize=$(ZIG_OPTIMIZE)
@@ -27,7 +27,7 @@ JOBS          ?= $(shell nproc 2>/dev/null || echo 2)
 check_zig = \
 	@if [ -z "$(ZIG)" ] || [ ! -x "$(ZIG)" ]; then \
 	  echo "ERROR: Zig compiler not found."; \
-	  echo "       Install Zig 0.16.0 and/or set ZIG=/path/to/zig."; \
+	  echo "       Install Zig 0.17.0 and/or set ZIG=/path/to/zig."; \
 	  echo "       See: https://ziglang.org/download/"; \
 	  exit 1; \
 	fi

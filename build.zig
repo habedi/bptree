@@ -40,21 +40,18 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Build and run unit tests");
     const run_tests = b.addRunArtifact(test_exe);
     run_tests.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_tests.addArgs(args);
     test_step.dependOn(&run_tests.step);
 
     // `zig build bench` build and run the benchmarks
     const bench_step = b.step("bench", "Build and run benchmarks");
     const run_bench = b.addRunArtifact(bench_exe);
     run_bench.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_bench.addArgs(args);
     bench_step.dependOn(&run_bench.step);
 
     // `zig build example` build and run the example program
     const example_step = b.step("example", "Build and run the example program");
     const run_example = b.addRunArtifact(example_exe);
     run_example.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_example.addArgs(args);
     example_step.dependOn(&run_example.step);
 }
 

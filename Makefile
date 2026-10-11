@@ -18,7 +18,7 @@ ASSET_DIR := assets
 # # Zig Build System Configuration
 # ################################################################################
 ZIG_LOCAL     := $(HOME)/.local/share/zig/0.17.0/zig
-ZIG           ?= $(shell test -x $(ZIG_LOCAL) && echo $(ZIG_LOCAL) || which zig 2>/dev/null || echo "")
+ZIG           ?= $(shell test -x $(ZIG_LOCAL) && echo $(ZIG_LOCAL) || command -v zig 2>/dev/null || echo "")
 ZIG_OPTIMIZE  ?= Debug
 ZIG_BUILD_OPTS ?= -Doptimize=$(ZIG_OPTIMIZE)
 JOBS          ?= $(shell nproc 2>/dev/null || echo 2)
@@ -58,6 +58,7 @@ CFLAGS = $(CFLAGS_BASE) $(CFLAGS_SAN) $(CFLAGS_TYPE)
 TEST_BINARY    := $(BIN_DIR)/test_bptree
 BENCH_BINARY   := $(BIN_DIR)/bench_bptree
 EXAMPLE_BINARY := $(BIN_DIR)/example
+SAFETY_BINARIES := $(BIN_DIR)/test_safety $(BIN_DIR)/test_safety_string $(BIN_DIR)/test_safety_wide
 
 # Default target
 .DEFAULT_GOAL := help
@@ -74,8 +75,14 @@ $(BIN_DIR):
 ## Pattern Rule for Building Binaries
 ##############################################################################################################
 # This rule compiles a C file in the TEST_DIR into a binary in BIN_DIR
-$(BIN_DIR)/%: $(TEST_DIR)/%.c | $(BIN_DIR)
+$(BIN_DIR)/%: $(TEST_DIR)/%.c $(INC_DIR)/bptree.h | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+$(SAFETY_BINARIES): $(TEST_DIR)/extras/test_safety.c $(INC_DIR)/bptree.h | $(BIN_DIR)
+	$(CC) $(CFLAGS) $(SAFETY_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+$(BIN_DIR)/test_safety_string: SAFETY_FLAGS=-DBPTREE_KEY_TYPE_STRING -DBPTREE_KEY_SIZE=5
+$(BIN_DIR)/test_safety_wide: SAFETY_FLAGS=-DBPTREE_TEST_WIDE_VALUE
 
 ##############################################################################################################
 ## Conventional Targets
@@ -85,9 +92,10 @@ $(BIN_DIR)/%: $(TEST_DIR)/%.c | $(BIN_DIR)
 all: clean test bench example docs ## Build everything, run tests, benchmarks, and generate docs
 
 .PHONY: test
-test: $(TEST_BINARY) ## Build and run tests
+test: $(TEST_BINARY) $(SAFETY_BINARIES) ## Build and run tests
 	@echo "Running tests..."
 	./$(TEST_BINARY)
+	@for binary in $(SAFETY_BINARIES); do ./$$binary; done
 
 .PHONY: bench
 bench: CFLAGS_TYPE=-O2 -DNDEBUG
@@ -179,20 +187,22 @@ profile: clean $(BENCH_BINARY) ## Build and run with gprof profiling
 .PHONY: ubsan
 ubsan: CFLAGS += -fsanitize=undefined
 ubsan: LDFLAGS += -fsanitize=undefined
-ubsan: clean $(TEST_BINARY) $(BENCH_BINARY) $(EXAMPLE_BINARY) ## Run `undefined behavior sanitizer` tests
+ubsan: clean $(TEST_BINARY) $(BENCH_BINARY) $(EXAMPLE_BINARY) $(SAFETY_BINARIES) ## Run `undefined behavior sanitizer` tests
 	@echo "Running UBSan tests..."
 	UBSAN_OPTIONS=print_stacktrace=1 ./$(EXAMPLE_BINARY)
 	UBSAN_OPTIONS=print_stacktrace=1 ./$(TEST_BINARY)
 	UBSAN_OPTIONS=print_stacktrace=1 ./$(BENCH_BINARY)
+	@for binary in $(SAFETY_BINARIES); do UBSAN_OPTIONS=halt_on_error=1 ./$$binary; done
 
 .PHONY: asan
 asan: CFLAGS += -fsanitize=address
 asan: LDFLAGS += -fsanitize=address
-asan: clean $(TEST_BINARY) $(BENCH_BINARY) $(EXAMPLE_BINARY) ## Run `address sanitizer` tests
+asan: clean $(TEST_BINARY) $(BENCH_BINARY) $(EXAMPLE_BINARY) $(SAFETY_BINARIES) ## Run `address sanitizer` tests
 	@echo "Running ASan tests..."
 	ASAN_OPTIONS=detect_leaks=1 ./$(EXAMPLE_BINARY)
 	ASAN_OPTIONS=detect_leaks=1 ./$(TEST_BINARY)
 	ASAN_OPTIONS=detect_leaks=1 ./$(BENCH_BINARY)
+	@for binary in $(SAFETY_BINARIES); do ASAN_OPTIONS=detect_leaks=1 ./$$binary; done
 
 .PHONY: analyze
 analyze: ## Run Clang Static Analyzer

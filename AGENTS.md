@@ -45,7 +45,7 @@ Priorities, in order:
   for benchmarks).
 - `Makefile`: GNU Make build automation with targets for building, testing, linting, formatting, profiling, and Zig build
   integration.
-- `build.zig` / `build.zig.zon`: Zig build system configuration (requires Zig 0.16.0). Compiles the same C source files as the
+- `build.zig` / `build.zig.zon`: Zig build system configuration (requires Zig 0.17.0). Compiles the same C source files as the
   Makefile.
 - `.clang-format`: Code formatting rules (Google base style, 4-space indent, 100-column limit).
 - `Doxyfile`: Doxygen configuration for API documentation generation.

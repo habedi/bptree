@@ -43,7 +43,7 @@
  *   - This implementation is NOT thread-safe. Caller must provide external
  *     synchronization (e.g., mutexes) for concurrent access.
  *
- * @version 0.5.0
+ * @version 0.5.1
  * @author
  *   "Hassan Abedi <hassan.abedi.t+bptree@gmail.com>"
  * @copyright MIT License
@@ -188,6 +188,7 @@ BPTREE_API void bptree_free(bptree* tree);
  *
  * Inserts a new element. Returns BPTREE_DUPLICATE_KEY if the key already exists.
  * The function splits nodes if an overflow occurs.
+ * Allocation failure leaves the tree unchanged.
  *
  * @param tree Pointer to the B+ tree.
  * @param key Pointer to the key to insert.
@@ -444,7 +445,8 @@ struct bptree_node {
     bool is_leaf;      /**< True if node is a leaf node */
     int num_keys;      /**< Number of keys stored in the node */
     bptree_node* next; /**< Pointer to the next leaf (used in range queries) */
-    char data[]; /**< Flexible array member that holds keys and either values or child pointers */
+    alignas(bptree_key_t) alignas(bptree_value_t) alignas(bptree_node*) char data[];
+    /**< Flexible array member that holds keys and either values or child pointers */
 };
 
 /*==============================================================================
@@ -488,8 +490,9 @@ static void bptree_debug_print(const bool enable, const char* fmt, ...) {
  */
 static size_t bptree_keys_area_size(const int max_keys) {
     const size_t keys_size = (size_t)(max_keys + 1) * sizeof(bptree_key_t);
-    const size_t req_align = (sizeof(bptree_value_t) > sizeof(bptree_node*) ? sizeof(bptree_value_t)
-                                                                            : sizeof(bptree_node*));
+    const size_t req_align =
+        (alignof(bptree_value_t) > alignof(bptree_node*) ? alignof(bptree_value_t)
+                                                         : alignof(bptree_node*));
     // Calculate required padding to meet alignment constraints
     const size_t pad = (req_align - (keys_size % req_align)) % req_align;
     return keys_size + pad;
@@ -1182,11 +1185,13 @@ static int bptree_node_search(const bptree* tree, const bptree_node* node,
  * @param value Value to insert.
  * @param promoted_key Pointer to store the key to be promoted if a split occurs.
  * @param new_child Pointer to store the new node created from the split.
+ * @param reserved_nodes Preallocated nodes consumed by splits, in leaf-to-root order.
  * @return Status code indicating success or failure.
  */
 static bptree_status bptree_insert_internal(bptree* tree, bptree_node* node,
                                             const bptree_key_t* key, const bptree_value_t value,
-                                            bptree_key_t* promoted_key, bptree_node** new_child) {
+                                            bptree_key_t* promoted_key, bptree_node** new_child,
+                                            bptree_node** reserved_nodes) {
     const int pos = bptree_node_search(tree, node, key);
     if (node->is_leaf) {
         bptree_key_t* keys = bptree_node_keys(node);
@@ -1212,17 +1217,8 @@ static bptree_status bptree_insert_internal(bptree* tree, bptree_node* node,
             const int total_keys = node->num_keys;
             const int split_idx = (total_keys + 1) / 2;
             const int new_node_keys = total_keys - split_idx;
-            bptree_node* new_leaf = bptree_node_alloc(tree, true);
-            if (!new_leaf) {
-                // Undo the insertion by shifting keys/values back over the inserted position.
-                memmove(&keys[pos], &keys[pos + 1],
-                        (node->num_keys - pos - 1) * sizeof(bptree_key_t));
-                memmove(&values[pos], &values[pos + 1],
-                        (node->num_keys - pos - 1) * sizeof(bptree_value_t));
-                node->num_keys--;
-                bptree_debug_print(tree->enable_debug, "Leaf split allocation failed!\n");
-                return BPTREE_ALLOCATION_FAILURE;
-            }
+            bptree_node* new_leaf = *reserved_nodes;
+            *reserved_nodes = new_leaf->next;
             bptree_key_t* new_keys = bptree_node_keys(new_leaf);
             bptree_value_t* new_values = bptree_node_values(new_leaf, tree->max_keys);
             // Move the latter half keys/values to the new leaf.
@@ -1244,8 +1240,8 @@ static bptree_status bptree_insert_internal(bptree* tree, bptree_node* node,
         bptree_node** children = bptree_node_children(node, tree->max_keys);
         bptree_key_t child_promoted_key;
         bptree_node* child_new_node = NULL;
-        const bptree_status status = bptree_insert_internal(tree, children[pos], key, value,
-                                                            &child_promoted_key, &child_new_node);
+        const bptree_status status = bptree_insert_internal(
+            tree, children[pos], key, value, &child_promoted_key, &child_new_node, reserved_nodes);
         if (status != BPTREE_OK || child_new_node == NULL) {
             return status;
         }
@@ -1267,19 +1263,9 @@ static bptree_status bptree_insert_internal(bptree* tree, bptree_node* node,
             const int total_keys = node->num_keys;
             const int split_idx = total_keys / 2;
             const int new_node_keys = total_keys - split_idx - 1;
-            bptree_node* new_internal = bptree_node_alloc(tree, false);
-            if (!new_internal) {
-                // The child split already succeeded and cannot be undone. The promoted
-                // key and child pointer are already inserted in this node, which now
-                // holds max_keys+1 keys. The buffer has room (allocated for max_keys+1
-                // keys and max_keys+2 children), so the data is safe. Accept the
-                // temporary overfull state rather than leaking the child node.
-                *new_child = NULL;
-                bptree_debug_print(tree->enable_debug,
-                                   "Internal split allocation failed! Node left with %d keys.\n",
-                                   node->num_keys);
-                return BPTREE_OK;
-            }
+            bptree_node* new_internal = *reserved_nodes;
+            *reserved_nodes = new_internal->next;
+            new_internal->next = NULL;
             bptree_key_t* new_keys = bptree_node_keys(new_internal);
             bptree_node** new_children = bptree_node_children(new_internal, tree->max_keys);
             *promoted_key = keys[split_idx];
@@ -1303,66 +1289,49 @@ static bptree_status bptree_insert_internal(bptree* tree, bptree_node* node,
 BPTREE_API bptree_status bptree_put(bptree* tree, const bptree_key_t* key, bptree_value_t value) {
     if (!tree || !key) return BPTREE_INVALID_ARGUMENT;
     if (!tree->root) return BPTREE_INTERNAL_ERROR;
+    // Reserve every split node before changing the tree, so allocation failure is atomic.
+    int splits = 0;
+    bptree_node* leaf = tree->root;
+    while (true) {
+        splits = leaf->num_keys == tree->max_keys ? splits + 1 : 0;
+        if (leaf->is_leaf) break;
+        leaf = bptree_node_children(leaf, tree->max_keys)[bptree_node_search(tree, leaf, key)];
+    }
+    const int pos = bptree_node_search(tree, leaf, key);
+    if (pos < leaf->num_keys && tree->compare(key, &bptree_node_keys(leaf)[pos]) == 0) {
+        return BPTREE_DUPLICATE_KEY;
+    }
+    const bool split_root = splits == tree->height;
+    bptree_node* reserved_nodes = NULL;
+    for (int i = splits + (split_root ? 1 : 0) - 1; i >= 0; --i) {
+        bptree_node* node = bptree_node_alloc(tree, i == 0);
+        if (!node) {
+            while (reserved_nodes) {
+                bptree_node* next = reserved_nodes->next;
+                free(reserved_nodes);
+                reserved_nodes = next;
+            }
+            return BPTREE_ALLOCATION_FAILURE;
+        }
+        node->next = reserved_nodes;
+        reserved_nodes = node;
+    }
     bptree_key_t promoted_key;
     bptree_node* new_node = NULL;
-    const bptree_status status =
-        bptree_insert_internal(tree, tree->root, key, value, &promoted_key, &new_node);
-    if (status == BPTREE_OK) {
-        // If a split occurred at the root, create a new root.
-        if (new_node != NULL) {
-            bptree_debug_print(tree->enable_debug, "Root split occurred. Creating new root.\n");
-            bptree_node* new_root = bptree_node_alloc(tree, false);
-            if (!new_root) {
-                // Cannot allocate a new root. Reunify the split by copying
-                // keys/values/children from new_node back into the old root.
-                // The old root's buffer has room for max_keys+1 entries.
-                if (tree->root->is_leaf) {
-                    bptree_key_t* rk = bptree_node_keys(tree->root);
-                    bptree_value_t* rv = bptree_node_values(tree->root, tree->max_keys);
-                    const bptree_key_t* nk = bptree_node_keys(new_node);
-                    const bptree_value_t* nv = bptree_node_values(new_node, tree->max_keys);
-                    memcpy(&rk[tree->root->num_keys], nk,
-                           new_node->num_keys * sizeof(bptree_key_t));
-                    memcpy(&rv[tree->root->num_keys], nv,
-                           new_node->num_keys * sizeof(bptree_value_t));
-                    tree->root->num_keys += new_node->num_keys;
-                    tree->root->next = new_node->next;
-                } else {
-                    bptree_key_t* rk = bptree_node_keys(tree->root);
-                    bptree_node** rc = bptree_node_children(tree->root, tree->max_keys);
-                    const bptree_key_t* nk = bptree_node_keys(new_node);
-                    bptree_node** nc = bptree_node_children(new_node, tree->max_keys);
-                    rk[tree->root->num_keys] = promoted_key;
-                    memcpy(&rk[tree->root->num_keys + 1], nk,
-                           new_node->num_keys * sizeof(bptree_key_t));
-                    memcpy(&rc[tree->root->num_keys + 1], nc,
-                           (new_node->num_keys + 1) * sizeof(bptree_node*));
-                    tree->root->num_keys += 1 + new_node->num_keys;
-                }
-                free(new_node);
-                bptree_debug_print(tree->enable_debug,
-                                   "Root split allocation failed! Root left with %d keys.\n",
-                                   tree->root->num_keys);
-                // Insertion succeeded; root is temporarily overfull but data-safe.
-                // Fall through to increment count below.
-            } else {
-                bptree_key_t* root_keys = bptree_node_keys(new_root);
-                bptree_node** root_children = bptree_node_children(new_root, tree->max_keys);
-                root_keys[0] = promoted_key;
-                root_children[0] = tree->root;
-                root_children[1] = new_node;
-                new_root->num_keys = 1;
-                tree->root = new_root;
-                tree->height++;
-                bptree_debug_print(tree->enable_debug, "New root created. Tree height: %d\n",
-                                   tree->height);
-            }
-        }
-        tree->count++;
-    } else {
-        bptree_debug_print(tree->enable_debug,
-                           "Insertion failed (Status: %d), count not incremented.\n", status);
+    const bptree_status status = bptree_insert_internal(
+        tree, splits ? tree->root : leaf, key, value, &promoted_key, &new_node, &reserved_nodes);
+    if (new_node) {
+        bptree_node* new_root = reserved_nodes;
+        new_root->next = NULL;
+        bptree_node_keys(new_root)[0] = promoted_key;
+        bptree_node** children = bptree_node_children(new_root, tree->max_keys);
+        children[0] = tree->root;
+        children[1] = new_node;
+        new_root->num_keys = 1;
+        tree->root = new_root;
+        tree->height++;
     }
+    if (status == BPTREE_OK) tree->count++;
     return status;
 }
 
@@ -1567,10 +1536,22 @@ BPTREE_API int bptree_max_keys(const bptree* tree) { return tree ? tree->max_key
 
 BPTREE_API void bptree_clear(bptree* tree) {
     if (!tree) return;
-    if (tree->root) {
-        bptree_free_node(tree->root, tree);
+    bptree_node* node = tree->root;
+    // Keep the leftmost leaf so clearing never needs an allocation.
+    while (node && !node->is_leaf) {
+        bptree_node** children = bptree_node_children(node, tree->max_keys);
+        for (int i = 1; i <= node->num_keys; ++i) {
+            bptree_free_node(children[i], tree);
+        }
+        bptree_node* next = children[0];
+        free(node);
+        node = next;
     }
-    tree->root = bptree_node_alloc(tree, true);
+    tree->root = node;
+    if (node) {
+        node->num_keys = 0;
+        node->next = NULL;
+    }
     tree->count = 0;
     tree->height = 1;
 }

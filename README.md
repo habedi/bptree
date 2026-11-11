@@ -197,9 +197,9 @@ Note that the benchmark target builds with release optimizations.
 
 ### Using Zig Build System
 
-Alternatively, you can use Zig 0.17.0 to build and run the tests, benchmarks, and the example program.
+Alternatively, you can use Zig 0.17 to build and run the tests, benchmarks, and the example program.
 
-Run `nix develop` to enter a development shell (with Zig 0.17.0, Clang, and the project's build tools).
+Run `nix develop` to enter a development shell (with Zig 0.17, Clang, and the project's build tools).
 
 ```shell
 zig build test      # Build and run unit tests

@@ -10,7 +10,7 @@
  * Tests are run for various tree orders (max_keys values).
  * String key support can be tested by defining BPTREE_KEY_TYPE_STRING during compilation.
  *
- * @version 0.5.1
+ * @version 0.5.2
  */
 
 #include <assert.h>
@@ -1730,6 +1730,67 @@ void test_iter_basic(void) {
 }
 
 /**
+ * @brief Test: Invariant checker detects leaf next-pointer, count, and height corruption.
+ */
+void test_invariants_leaf_chain_and_count(void) {
+    bptree* tree = create_test_tree_with_order(3);
+    ASSERT(tree != NULL, "Tree creation failed");
+
+    const int N = 10;
+#ifdef BPTREE_KEY_TYPE_STRING
+    char key_buf[32];
+    for (int i = 0; i < N; i++) {
+        sprintf(key_buf, "inv%02d", i);
+        bptree_key_t k = KEY(key_buf);
+        char* v = MAKE_VALUE_STR(key_buf);
+        track_alloc(v);
+        ASSERT(bptree_put(tree, &k, v) == BPTREE_OK, "Insert failed for key %s", key_buf);
+    }
+#else
+    for (int i = 0; i < N; i++) {
+        bptree_key_t k = (bptree_key_t)(i + 1);
+        ASSERT(bptree_put(tree, &k, MAKE_VALUE_NUM(k)) == BPTREE_OK, "Insert failed for key %lld",
+               (long long)k);
+    }
+#endif
+    ASSERT(bptree_check_invariants(tree) == true, "Valid tree failed invariant check");
+
+    // Corrupt count.
+    tree->count++;
+    ASSERT(bptree_check_invariants(tree) == false, "Corrupted count was not detected");
+    tree->count--;
+
+    // Corrupt height.
+    tree->height++;
+    ASSERT(bptree_check_invariants(tree) == false, "Corrupted height was not detected");
+    tree->height--;
+
+    // Corrupt leftmost leaf next pointer.
+    bptree_node* leftmost = bptree_leftmost_leaf(tree);
+    ASSERT(leftmost != NULL && leftmost->next != NULL, "Expected multi-leaf tree");
+    bptree_node* orig_next = leftmost->next;
+    leftmost->next = NULL;
+    ASSERT(bptree_check_invariants(tree) == false, "Broken leaf next chain was not detected");
+    leftmost->next = orig_next;
+
+    // Corrupt rightmost leaf next pointer.
+    bptree_node* rightmost = leftmost;
+    while (rightmost->next != NULL) {
+        rightmost = rightmost->next;
+    }
+    rightmost->next = leftmost;
+    ASSERT(bptree_check_invariants(tree) == false,
+           "Non-NULL rightmost leaf next pointer was not detected");
+    rightmost->next = NULL;
+
+    ASSERT(bptree_check_invariants(tree) == true, "Restored tree failed invariant check");
+    bptree_free(tree);
+#ifdef BPTREE_KEY_TYPE_STRING
+    cleanup_alloc_track();
+#endif
+}
+
+/**
  * @brief Main entry point for the B+ tree test suite.
  *
  * Runs a series of test functions to validate the bptree library.
@@ -1813,6 +1874,7 @@ int main(void) {
     RUN_TEST(test_api_argument_validation);
     RUN_TEST(test_accessors_and_clear);
     RUN_TEST(test_iter_basic);
+    RUN_TEST(test_invariants_leaf_chain_and_count);
 
     // --- Test Summary ---
     fprintf(stderr, "----------------------------------------\n");

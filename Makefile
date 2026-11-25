@@ -17,7 +17,7 @@ ASSET_DIR := assets
 # ################################################################################
 # # Zig Build System Configuration
 # ################################################################################
-ZIG_LOCAL     := $(HOME)/.local/share/zig/0.17.0/zig
+ZIG_LOCAL     := $(HOME)/.local/share/zig/0.17.1/zig
 ZIG           ?= $(shell test -x $(ZIG_LOCAL) && echo $(ZIG_LOCAL) || command -v zig 2>/dev/null || echo "")
 ZIG_OPTIMIZE  ?= Debug
 ZIG_BUILD_OPTS ?= -Doptimize=$(ZIG_OPTIMIZE)
@@ -292,3 +292,19 @@ setup-hooks: ## Install Git hooks (pre-commit and pre-push)
 test-hooks: ## Test Git hooks on all files
 	@echo "Testing Git hooks..."
 	@pre-commit run --all-files --show-diff-on-failure
+
+##############################################################################################################
+## Formal Verification Targets (using Lean 4)
+##############################################################################################################
+
+.PHONY: lean-build
+lean-build: ## Build Lean formal verification subproject
+	$(MAKE) -C verification/lean build
+
+.PHONY: lean-test
+lean-test: ## Run Lean formal verification test suite
+	$(MAKE) -C verification/lean test
+
+.PHONY: lean-lint
+lean-lint: ## Lint Lean formal verification sources
+	$(MAKE) -C verification/lean lint

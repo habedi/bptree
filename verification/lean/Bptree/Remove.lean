@@ -1,0 +1,363 @@
+module
+
+public import Bptree.Search
+
+@[expose] public section
+
+namespace Bptree
+
+/-- Remove `k` from a leaf entry list. Returns `none` if `k` is not present,
+    or `some (entries', wasFirst)` where `wasFirst` is `true` iff `k` was at index 0. -/
+def removeEntries {V : Type} (entries : List (Nat × V)) (k : Nat) :
+    Option (List (Nat × V) × Bool) :=
+  match entries with
+  | [] => none
+  | (k', v') :: rest =>
+    if k == k' then
+      some (rest, true)
+    else
+      match removeEntries rest k with
+      | none => none
+      | some (rest', _) => some ((k', v') :: rest', false)
+
+/-- Remove the element at index `i` from a list. -/
+def eraseListIdx {α : Type} (xs : List α) (i : Nat) : List α :=
+  xs.take i ++ xs.drop (i + 1)
+
+/-- Return the last element of a list paired with its prefix, if non-empty. -/
+def splitLast? {α : Type} : List α → Option (List α × α)
+  | [] => none
+  | [x] => some ([], x)
+  | x :: xs =>
+    match splitLast? xs with
+    | none => none
+    | some (init, last) => some (x :: init, last)
+
+/-- Rebalance an underflowing child at `childIdx` inside an internal node,
+    matching `bptree_rebalance_up` in `bptree.h` (borrow left, borrow right,
+    merge left, merge right). -/
+def rebalanceChild {V : Type} (maxKeys : Nat) (parentKeys : List Nat)
+    (children : List (BPlusTree Nat V)) (childIdx : Nat) :
+    List Nat × List (BPlusTree Nat V) :=
+  match children[childIdx]? with
+  | none => (parentKeys, children)
+  | some child =>
+    let minKeys := if child.isLeaf then minLeafKeys maxKeys else minInternalKeys maxKeys
+    if child.numKeys ≥ minKeys then
+      (parentKeys, children)
+    else
+      -- Try borrowing from the left sibling.
+      let borrowedLeft : Option (List Nat × List (BPlusTree Nat V)) :=
+        if childIdx > 0 then
+          match children[childIdx - 1]? with
+          | some leftSib =>
+            let leftMin := if leftSib.isLeaf then minLeafKeys maxKeys else minInternalKeys maxKeys
+            if leftSib.numKeys > leftMin then
+              match leftSib, child with
+              | .leaf leftEntries, .leaf childEntries =>
+                match splitLast? leftEntries with
+                | some (leftInit, lastEntry) =>
+                  let leftSib' := .leaf leftInit
+                  let child' := .leaf (lastEntry :: childEntries)
+                  let parentKeys' := parentKeys.set (childIdx - 1) lastEntry.1
+                  let children' := (children.set (childIdx - 1) leftSib').set childIdx child'
+                  some (parentKeys', children')
+                | none => none
+              | .internal leftKeys leftChildren, .internal childKeys childChildren =>
+                match splitLast? leftKeys, splitLast? leftChildren, parentKeys[childIdx - 1]? with
+                | some (lkInit, lastKey), some (lcInit, lastChild), some sep =>
+                  let leftSib' := .internal lkInit lcInit
+                  let child' := .internal (sep :: childKeys) (lastChild :: childChildren)
+                  let parentKeys' := parentKeys.set (childIdx - 1) lastKey
+                  let children' := (children.set (childIdx - 1) leftSib').set childIdx child'
+                  some (parentKeys', children')
+                | _, _, _ => none
+              | _, _ => none
+            else
+              none
+          | none => none
+        else
+          none
+      match borrowedLeft with
+      | some res => res
+      | none =>
+        -- Try borrowing from the right sibling.
+        let borrowedRight : Option (List Nat × List (BPlusTree Nat V)) :=
+          if childIdx < parentKeys.length then
+            match children[childIdx + 1]? with
+            | some rightSib =>
+              let rightMin :=
+                if rightSib.isLeaf then minLeafKeys maxKeys else minInternalKeys maxKeys
+              if rightSib.numKeys > rightMin then
+                match child, rightSib with
+                | .leaf childEntries, .leaf (r0 :: r1 :: rs) =>
+                  let child' := .leaf (childEntries ++ [r0])
+                  let rightSib' := .leaf (r1 :: rs)
+                  let parentKeys' := parentKeys.set childIdx r1.1
+                  let children' := (children.set childIdx child').set (childIdx + 1) rightSib'
+                  some (parentKeys', children')
+                | .internal childKeys childChildren, .internal (rk0 :: rks) (rc0 :: rcs) =>
+                  match parentKeys[childIdx]? with
+                  | some sep =>
+                    let child' := .internal (childKeys ++ [sep]) (childChildren ++ [rc0])
+                    let rightSib' := .internal rks rcs
+                    let parentKeys' := parentKeys.set childIdx rk0
+                    let children' := (children.set childIdx child').set (childIdx + 1) rightSib'
+                    some (parentKeys', children')
+                  | none => none
+                | _, _ => none
+              else
+                none
+            | none => none
+          else
+            none
+        match borrowedRight with
+        | some res => res
+        | none =>
+          -- Merge with left sibling if available, otherwise merge with right sibling.
+          if childIdx > 0 then
+            match children[childIdx - 1]? with
+            | some leftSib =>
+              match leftSib, child with
+              | .leaf leftEntries, .leaf childEntries =>
+                let merged := .leaf (leftEntries ++ childEntries)
+                let parentKeys' := eraseListIdx parentKeys (childIdx - 1)
+                let children' := eraseListIdx (children.set (childIdx - 1) merged) childIdx
+                (parentKeys', children')
+              | .internal leftKeys leftChildren, .internal childKeys childChildren =>
+                match parentKeys[childIdx - 1]? with
+                | some sep =>
+                  let merged := .internal (leftKeys ++ [sep] ++ childKeys)
+                    (leftChildren ++ childChildren)
+                  let parentKeys' := eraseListIdx parentKeys (childIdx - 1)
+                  let children' := eraseListIdx (children.set (childIdx - 1) merged) childIdx
+                  (parentKeys', children')
+                | none => (parentKeys, children)
+              | _, _ => (parentKeys, children)
+            | none => (parentKeys, children)
+          else
+            match children[childIdx + 1]? with
+            | some rightSib =>
+              match child, rightSib with
+              | .leaf childEntries, .leaf rightEntries =>
+                let merged := .leaf (childEntries ++ rightEntries)
+                let parentKeys' := eraseListIdx parentKeys childIdx
+                let children' := eraseListIdx (children.set childIdx merged) (childIdx + 1)
+                (parentKeys', children')
+              | .internal childKeys childChildren, .internal rightKeys rightChildren =>
+                match parentKeys[childIdx]? with
+                | some sep =>
+                  let merged := .internal (childKeys ++ [sep] ++ rightKeys)
+                    (childChildren ++ rightChildren)
+                  let parentKeys' := eraseListIdx parentKeys childIdx
+                  let children' := eraseListIdx (children.set childIdx merged) (childIdx + 1)
+                  (parentKeys', children')
+                | none => (parentKeys, children)
+              | _, _ => (parentKeys, children)
+            | none => (parentKeys, children)
+
+/-- Recursive deletion helper returning `(updatedSubtree, pendingNewMin, needsRebalance)`. -/
+def removeNode {V : Type} (maxKeys : Nat) (t : BPlusTree Nat V) (k : Nat) :
+    Option (BPlusTree Nat V × Option Nat × Bool) :=
+  match t with
+  | .leaf entries =>
+    match removeEntries entries k with
+    | none => none
+    | some (entries', wasFirst) =>
+      let pendingMin := if wasFirst then entries'.head?.map Prod.fst else none
+      some (.leaf entries', pendingMin, true)
+  | .internal keys children =>
+    let pos := findChildIdx keys k
+    match _hc : children[pos]? with
+    | none => none
+    | some child =>
+      match removeNode maxKeys child k with
+      | none => none
+      | some (child', pendingMin, doRebalance) =>
+        let (keys1, pendingMin') :=
+          match pendingMin with
+          | none => (keys, none)
+          | some newMin =>
+            if pos > 0 then
+              if keys[pos - 1]? == some k then
+                (keys.set (pos - 1) newMin, none)
+              else
+                (keys, some newMin)
+            else
+              (keys, some newMin)
+        let children1 := children.set pos child'
+        if doRebalance then
+          let minKeys := if child'.isLeaf then minLeafKeys maxKeys else minInternalKeys maxKeys
+          if child'.numKeys ≥ minKeys then
+            some (.internal keys1 children1, pendingMin', false)
+          else
+            let (keys2, children2) := rebalanceChild maxKeys keys1 children1 pos
+            some (.internal keys2 children2, pendingMin', true)
+        else
+          some (.internal keys1 children1, pendingMin', false)
+  termination_by sizeOf t
+  decreasing_by
+    simp_wf
+    have hmem : child ∈ children := List.mem_of_getElem? _hc
+    have hsz := List.sizeOf_lt_of_mem hmem
+    omega
+
+/-- Top-level deletion matching `bptree_remove`. -/
+def remove {V : Type} (maxKeys : Nat) (t : BPlusTree Nat V) (k : Nat) :
+    Except Status (BPlusTree Nat V) :=
+  match t with
+  | .leaf [] => .error .keyNotFound
+  | _ =>
+    match removeNode maxKeys t k with
+    | none => .error .keyNotFound
+    | some (.internal [] (c :: _), _, _) => .ok c
+    | some (t', _, _) => .ok t'
+
+/-- Removing any key from an empty tree returns `Status.keyNotFound`. -/
+theorem remove_empty (maxKeys : Nat) (V : Type) (k : Nat) :
+    remove maxKeys (empty Nat V) k = .error .keyNotFound := by
+  simp [empty, remove]
+
+/-- If `leafLookup entries k = none`, then `removeEntries entries k = none`. -/
+theorem removeEntries_not_found {V : Type} {entries : List (Nat × V)} {k : Nat}
+    (h : leafLookup entries k = none) : removeEntries entries k = none := by
+  induction entries with
+  | nil => simp [removeEntries]
+  | cons hd tl ih =>
+    rcases hd with ⟨k', v'⟩
+    simp only [leafLookup] at h
+    by_cases hkk : k == k'
+    · simp [hkk] at h
+    · simp only [hkk, Bool.false_eq_true, ↓reduceIte] at h
+      simp only [removeEntries, hkk, Bool.false_eq_true, ↓reduceIte, ih h]
+
+/-- Removing an existing key decreases `entries.length` by 1. -/
+theorem removeEntries_length {V : Type} {entries entries' : List (Nat × V)} {k : Nat} {b : Bool}
+    (h : removeEntries entries k = some (entries', b)) :
+    entries'.length + 1 = entries.length := by
+  induction entries generalizing entries' b with
+  | nil => simp [removeEntries] at h
+  | cons hd tl ih =>
+    rcases hd with ⟨k', v'⟩
+    simp only [removeEntries] at h
+    by_cases hkk : k == k'
+    · simp only [hkk, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, _⟩
+      simp
+    · simp only [hkk, Bool.false_eq_true, ↓reduceIte] at h
+      split at h
+      · simp at h
+      · rename_i rest' b' hrec
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, _⟩
+        have hlen := ih hrec
+        simp only [List.length_cons]
+        omega
+
+private theorem mem_of_mem_removeEntries {V : Type} {entries entries' : List (Nat × V)}
+    {k : Nat} {b : Bool} (h : removeEntries entries k = some (entries', b)) (p : Nat × V) :
+    p ∈ entries' → p ∈ entries := by
+  induction entries generalizing entries' b with
+  | nil => simp [removeEntries] at h
+  | cons hd tl ih =>
+    rcases hd with ⟨k', v'⟩
+    simp only [removeEntries] at h
+    by_cases hkk : k == k'
+    · simp only [hkk, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, _⟩
+      intro hp
+      exact List.mem_cons_of_mem (k', v') hp
+    · simp only [hkk, Bool.false_eq_true, ↓reduceIte] at h
+      split at h
+      · simp at h
+      · rename_i rest' b' hrec
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, _⟩
+        intro hp
+        rcases List.mem_cons.mp hp with rfl | hp_tl
+        · exact List.mem_cons_self
+        · exact List.mem_cons_of_mem (k', v') (ih hrec hp_tl)
+
+/-- `removeEntries` preserves `EntriesSorted`. -/
+theorem removeEntries_preserves_sorted {V : Type} {entries entries' : List (Nat × V)}
+    {k : Nat} {b : Bool} (hsort : EntriesSorted entries)
+    (h : removeEntries entries k = some (entries', b)) :
+    EntriesSorted entries' := by
+  induction entries generalizing entries' b with
+  | nil => simp [removeEntries] at h
+  | cons hd tl ih =>
+    rcases hd with ⟨k', v'⟩
+    simp only [EntriesSorted, List.map_cons, List.pairwise_cons] at hsort
+    simp only [removeEntries] at h
+    by_cases hkk : k == k'
+    · simp only [hkk, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, _⟩
+      exact hsort.2
+    · simp only [hkk, Bool.false_eq_true, ↓reduceIte] at h
+      split at h
+      · simp at h
+      · rename_i rest' b' hrec
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, _⟩
+        simp only [EntriesSorted, List.map_cons, List.pairwise_cons]
+        refine ⟨?_, ih hsort.2 hrec⟩
+        intro x hx
+        rcases List.mem_map.mp hx with ⟨⟨xk, vx⟩, hmem, rfl⟩
+        exact hsort.1 xk (List.mem_map.mpr ⟨(xk, vx), mem_of_mem_removeEntries hrec (xk, vx) hmem, rfl⟩)
+
+/-- After removing `k` from a sorted leaf, `leafLookup entries' k = none`. -/
+theorem leafLookup_removeEntries_self {V : Type} {entries entries' : List (Nat × V)}
+    {k : Nat} {b : Bool} (hsort : EntriesSorted entries)
+    (h : removeEntries entries k = some (entries', b)) :
+    leafLookup entries' k = none := by
+  induction entries generalizing entries' b with
+  | nil => simp [removeEntries] at h
+  | cons hd tl ih =>
+    rcases hd with ⟨k', v'⟩
+    simp only [EntriesSorted, List.map_cons, List.pairwise_cons] at hsort
+    simp only [removeEntries] at h
+    by_cases hkk : k == k'
+    · simp only [hkk, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, _⟩
+      have hkeq : k = k' := beq_iff_eq.mp hkk
+      subst hkeq
+      by_cases hnone : leafLookup tl k = none
+      · exact hnone
+      · obtain ⟨v, hv⟩ := Option.ne_none_iff_exists'.mp hnone
+        have hmem := leafLookup_mem hv
+        have hlt := hsort.1 k (List.mem_map.mpr ⟨(k, v), hmem, rfl⟩)
+        omega
+    · simp only [hkk, Bool.false_eq_true, ↓reduceIte] at h
+      split at h
+      · simp at h
+      · rename_i rest' b' hrec
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, _⟩
+        simp only [leafLookup, hkk, Bool.false_eq_true, ↓reduceIte]
+        exact ih hsort.2 hrec
+
+/-- Merging an underflowing leaf (`minLeafKeys - 1`) with a minimum-occupancy leaf
+    (`minLeafKeys`) always fits within `[minLeafKeys, maxKeys]` (no buffer overflow). -/
+theorem mergeLeaf_bounds {V : Type} {maxKeys : Nat} {left right : List (Nat × V)}
+    (hcap : 3 ≤ maxKeys)
+    (hl : left.length = minLeafKeys maxKeys - 1)
+    (hr : right.length = minLeafKeys maxKeys) :
+    minLeafKeys maxKeys ≤ (left ++ right).length ∧ (left ++ right).length ≤ maxKeys := by
+  simp only [List.length_append, hl, hr, minLeafKeys]
+  omega
+
+/-- Merging an underflowing internal node (`minInternalKeys - 1`) with a minimum-occupancy
+    internal node (`minInternalKeys`) and one pulled-down separator key always fits within
+    `[minInternalKeys, maxKeys]` (no buffer overflow). -/
+theorem mergeInternal_bounds {maxKeys : Nat} {leftKeys rightKeys : List Nat}
+    (hcap : 3 ≤ maxKeys)
+    (hl : leftKeys.length = minInternalKeys maxKeys - 1)
+    (hr : rightKeys.length = minInternalKeys maxKeys) :
+    minInternalKeys maxKeys ≤ leftKeys.length + 1 + rightKeys.length ∧
+    leftKeys.length + 1 + rightKeys.length ≤ maxKeys := by
+  simp only [hl, hr, minInternalKeys]
+  omega
+
+end Bptree
+
+end

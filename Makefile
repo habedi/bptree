@@ -301,6 +301,10 @@ test-hooks: ## Test Git hooks on all files
 lean-build: ## Build Lean formal verification subproject
 	$(MAKE) -C verification/lean build
 
+.PHONY: lean-cache
+lean-cache: ## Download precompiled Mathlib build cache
+	$(MAKE) -C verification/lean cache-get
+
 .PHONY: lean-test
 lean-test: ## Run Lean formal verification test suite
 	$(MAKE) -C verification/lean test

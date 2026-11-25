@@ -24,10 +24,13 @@
             gnumake
             clang
             clang-tools
+            gcc
             cppcheck
             doxygen
             graphviz
             elan
+            git
+            curl
           ];
         };
       });

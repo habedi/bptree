@@ -51,6 +51,12 @@ private meta def sampleTree : Except Status (BPlusTree Nat Nat) := do
   | .ok t => reservedNodesNeeded 3 t 60 ≤ t.height + 1
   | .error _ => false
 
+-- Canonical serialization check
+#guard (empty Nat Nat).serialize == "(leaf [])"
+#guard match sampleTree with
+  | .ok t => t.serialize == "(internal [30] [(leaf [10:100,20:200]),(leaf [30:300,40:400,50:500])])"
+  | .error _ => false
+
 -- Verified theorem instantiations
 example : Valid 3 (empty Nat Nat) :=
   valid_empty Nat ⟨by decide, by decide⟩

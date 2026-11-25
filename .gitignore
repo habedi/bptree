@@ -70,8 +70,6 @@ htmlcov/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
-Makefile
-makefile
 configure
 config.log
 config.status

@@ -84,6 +84,9 @@ $(SAFETY_BINARIES): $(TEST_DIR)/extras/test_safety.c $(INC_DIR)/bptree.h | $(BIN
 $(BIN_DIR)/test_safety_string: SAFETY_FLAGS=-DBPTREE_KEY_TYPE_STRING -DBPTREE_KEY_SIZE=5
 $(BIN_DIR)/test_safety_wide: SAFETY_FLAGS=-DBPTREE_TEST_WIDE_VALUE
 
+$(BIN_DIR)/test_differential: $(TEST_DIR)/extras/test_differential.c $(INC_DIR)/bptree.h | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
 ##############################################################################################################
 ## Conventional Targets
 ##############################################################################################################
@@ -301,6 +304,10 @@ test-hooks: ## Test Git hooks on all files
 lean-build: ## Build Lean formal verification subproject
 	$(MAKE) -C verification/lean build
 
+.PHONY: lean-cache
+lean-cache: ## Download precompiled Mathlib build cache
+	$(MAKE) -C verification/lean cache-get
+
 .PHONY: lean-test
 lean-test: ## Run Lean formal verification test suite
 	$(MAKE) -C verification/lean test
@@ -308,3 +315,11 @@ lean-test: ## Run Lean formal verification test suite
 .PHONY: lean-lint
 lean-lint: ## Lint Lean formal verification sources
 	$(MAKE) -C verification/lean lint
+
+.PHONY: lean-diff
+lean-diff: $(BIN_DIR)/test_differential ## Run differential tests comparing C and Lean 4 tree structures
+	@echo "Running differential tests (C vs. Lean 4)..."
+	./$(BIN_DIR)/test_differential > $(BIN_DIR)/diff_c.txt
+	$(MAKE) -s -C verification/lean run > $(BIN_DIR)/diff_lean.txt
+	diff -u $(BIN_DIR)/diff_c.txt $(BIN_DIR)/diff_lean.txt
+	@echo "Differential test passed: C and Lean 4 produced identical trees across all workloads."

@@ -99,6 +99,23 @@ def BPlusTree.nodeCount {K V : Type} : BPlusTree K V → Nat
   | .leaf _ => 1
   | .internal _ children => 1 + (children.map BPlusTree.nodeCount).sum
 
+mutual
+  /-- Serialize a B+ tree into a canonical S-expression string for differential testing against C. -/
+  def BPlusTree.serialize : BPlusTree Nat Nat → String
+    | .leaf entries =>
+      let items := entries.map (fun p => s!"{p.1}:{p.2}")
+      s!"(leaf [{String.intercalate "," items}])"
+    | .internal keys children =>
+      let kstr := String.intercalate "," (keys.map toString)
+      let cstr := String.intercalate "," (BPlusTree.serializeList children)
+      s!"(internal [{kstr}] [{cstr}])"
+
+  /-- Helper to serialize a list of child subtrees. -/
+  def BPlusTree.serializeList : List (BPlusTree Nat Nat) → List String
+    | [] => []
+    | c :: cs => BPlusTree.serialize c :: BPlusTree.serializeList cs
+end
+
 /-- Minimum leaf keys is at least 1 when `3 ≤ maxKeys`. -/
 theorem minLeafKeys_pos {maxKeys : Nat} (h : 3 ≤ maxKeys) : 1 ≤ minLeafKeys maxKeys := by
   unfold minLeafKeys

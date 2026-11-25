@@ -30,14 +30,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y make
-          make install-deps
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
 
-      - name: Run tests and generate coverage report
-        run: make coverage
+      - name: Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Run C tests and generate coverage report
+        run: |
+          nix develop --command bash -c "make test && make coverage"
+
+      - name: Run Lean 4 formal verification tests
+        run: |
+          nix develop --command bash -c "make lean-cache && make lean-test && make lean-diff"
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5

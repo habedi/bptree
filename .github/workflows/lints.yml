@@ -30,11 +30,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y make
-          make install-deps
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
 
-      - name: Run linters
-        run: make lint
+      - name: Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Run C linters
+        run: nix develop --command make lint
+
+      - name: Run Lean 4 formal verification linter
+        run: |
+          nix develop --command bash -c "make lean-cache && make lean-lint"

@@ -1598,8 +1598,8 @@ BPTREE_API bool bptree_check_invariants(const bptree* tree) {
     }
     if (total_keys != tree->count) {
         bptree_debug_print(tree->enable_debug,
-                           "Invariant Fail: Total leaf keys (%d) != tree->count (%d)\n",
-                           total_keys, tree->count);
+                           "Invariant Fail: Total leaf keys (%d) != tree->count (%d)\n", total_keys,
+                           tree->count);
         return false;
     }
     return true;

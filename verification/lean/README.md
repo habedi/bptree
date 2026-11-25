@@ -74,5 +74,6 @@ Run these commands from the repository root after `nix develop`:
 make lean-build   # Compile the Lean library and executable
 make lean-test    # Run #guard and theorem checks in Tests.lean
 make lean-lint    # Build with warnings treated as errors (--wfail)
+make lean-diff    # Run differential tests comparing C and Lean 4 tree structures
 make -C verification/lean run   # Run Main.lean
 ```

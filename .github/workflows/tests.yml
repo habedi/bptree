@@ -42,7 +42,7 @@ jobs:
 
       - name: Run Lean 4 formal verification tests
         run: |
-          nix develop --command bash -c "make lean-cache && make lean-test"
+          nix develop --command bash -c "make lean-cache && make lean-test && make lean-diff"
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5

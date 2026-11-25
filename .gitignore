@@ -152,3 +152,4 @@ core.*
 zig-out/
 zig-pkg/
 .agents/
+verification/lean/.lake/

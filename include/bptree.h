@@ -636,7 +636,8 @@ static int bptree_count_nodes(const bptree_node* node, const bptree* tree) {
  * @return True if the invariants pass, false if any check fails.
  */
 static bool bptree_check_invariants_node(bptree_node* node, const bptree* tree, const int depth,
-                                         int* leaf_depth) {
+                                         int* leaf_depth, bptree_node** prev_leaf,
+                                         int* total_keys) {
     if (!node) return false;
     const bptree_key_t* keys = bptree_node_keys(node);
     const bool is_root = (tree->root == node);
@@ -680,6 +681,14 @@ static bool bptree_check_invariants_node(bptree_node* node, const bptree* tree, 
                                (void*)node, node->num_keys);
             return false;
         }
+        if (*prev_leaf != NULL && (*prev_leaf)->next != node) {
+            bptree_debug_print(tree->enable_debug,
+                               "Invariant Fail: Leaf next pointer mismatch (%p->next = %p != %p)\n",
+                               (void*)*prev_leaf, (void*)(*prev_leaf)->next, (void*)node);
+            return false;
+        }
+        *prev_leaf = node;
+        *total_keys += node->num_keys;
         return true;
     } else {
         // For internal nodes, check occupancy constraints.
@@ -734,7 +743,8 @@ static bool bptree_check_invariants_node(bptree_node* node, const bptree* tree, 
                     return false;
                 }
             }
-            if (!bptree_check_invariants_node(children[0], tree, depth + 1, leaf_depth))
+            if (!bptree_check_invariants_node(children[0], tree, depth + 1, leaf_depth, prev_leaf,
+                                              total_keys))
                 return false;
             // Loop over remaining children.
             for (int i = 1; i <= node->num_keys; i++) {
@@ -771,7 +781,8 @@ static bool bptree_check_invariants_node(bptree_node* node, const bptree* tree, 
                                        (void*)node, i);
                     return false;
                 }
-                if (!bptree_check_invariants_node(children[i], tree, depth + 1, leaf_depth))
+                if (!bptree_check_invariants_node(children[i], tree, depth + 1, leaf_depth,
+                                                  prev_leaf, total_keys))
                     return false;
             }
         }
@@ -1559,7 +1570,8 @@ BPTREE_API void bptree_clear(bptree* tree) {
 BPTREE_API bool bptree_check_invariants(const bptree* tree) {
     if (!tree || !tree->root) return false;
     if (tree->count == 0) {
-        if (tree->root->is_leaf && tree->root->num_keys == 0 && tree->height == 1) {
+        if (tree->root->is_leaf && tree->root->num_keys == 0 && tree->height == 1 &&
+            tree->root->next == NULL) {
             return true;
         } else {
             bptree_debug_print(tree->enable_debug, "Invariant Fail: Empty tree state incorrect.\n");
@@ -1567,7 +1579,30 @@ BPTREE_API bool bptree_check_invariants(const bptree* tree) {
         }
     }
     int leaf_depth = -1;
-    return bptree_check_invariants_node(tree->root, tree, 0, &leaf_depth);
+    bptree_node* prev_leaf = NULL;
+    int total_keys = 0;
+    if (!bptree_check_invariants_node(tree->root, tree, 0, &leaf_depth, &prev_leaf, &total_keys)) {
+        return false;
+    }
+    if (leaf_depth + 1 != tree->height) {
+        bptree_debug_print(tree->enable_debug,
+                           "Invariant Fail: Tree height (%d) != leaf_depth + 1 (%d)\n",
+                           tree->height, leaf_depth + 1);
+        return false;
+    }
+    if (prev_leaf != NULL && prev_leaf->next != NULL) {
+        bptree_debug_print(tree->enable_debug,
+                           "Invariant Fail: Rightmost leaf %p has non-NULL next pointer %p\n",
+                           (void*)prev_leaf, (void*)prev_leaf->next);
+        return false;
+    }
+    if (total_keys != tree->count) {
+        bptree_debug_print(tree->enable_debug,
+                           "Invariant Fail: Total leaf keys (%d) != tree->count (%d)\n",
+                           total_keys, tree->count);
+        return false;
+    }
+    return true;
 }
 
 BPTREE_API bool bptree_contains(const bptree* tree, const bptree_key_t* key) {

@@ -27,6 +27,7 @@
             cppcheck
             doxygen
             graphviz
+            elan
           ];
         };
       });

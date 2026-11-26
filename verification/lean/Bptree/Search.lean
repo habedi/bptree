@@ -188,6 +188,41 @@ theorem iterFind_eq_some_iff {V : Type} (t : BPlusTree Nat V) (k : Nat) (p : Nat
   · rintro ⟨hk, hv⟩
     exact ⟨p.2, hv, by ext <;> simp [hk]⟩
 
+private theorem mem_toList_of_mem_children {K V : Type} {c : BPlusTree K V}
+    {children : List (BPlusTree K V)} {keys : List K} {p : K × V}
+    (hc : c ∈ children) (hp : p ∈ c.toList) :
+    p ∈ (BPlusTree.internal keys children).toList := by
+  simp only [BPlusTree.toList, BPlusTree.leaves, List.mem_flatten] at hp ⊢
+  rcases hp with ⟨l, hl_leaves, hp_l⟩
+  exact ⟨l, List.mem_flatMap.mpr ⟨c, hc, hl_leaves⟩, hp_l⟩
+
+/-- Full-tree search soundness: if `lookup t k = some v`, then `(k, v) ∈ t.toList`. -/
+theorem lookup_mem_toList {V : Type} :
+    (t : BPlusTree Nat V) → {k : Nat} → {v : V} →
+    lookup t k = some v → (k, v) ∈ t.toList
+  | .leaf entries, k, v, h => by
+    simp only [lookup] at h
+    simpa [BPlusTree.toList, BPlusTree.leaves] using leafLookup_mem h
+  | .internal keys children, k, v, h => by
+    simp only [lookup] at h
+    split at h
+    · rename_i c hc
+      have hmem : c ∈ children := List.mem_of_getElem? hc
+      exact mem_toList_of_mem_children hmem (lookup_mem_toList c h)
+    · simp at h
+  termination_by t => sizeOf t
+  decreasing_by
+    simp_wf
+    have hsz := List.sizeOf_lt_of_mem hmem
+    omega
+
+/-- Full-tree containment soundness: if `contains t k = true`, then some `(k, v) ∈ t.toList`. -/
+theorem contains_true_exists_mem_toList {V : Type} {t : BPlusTree Nat V} {k : Nat}
+    (h : contains t k = true) : ∃ v, (k, v) ∈ t.toList := by
+  simp only [contains, Option.isSome_iff_exists] at h
+  rcases h with ⟨v, hv⟩
+  exact ⟨v, lookup_mem_toList t hv⟩
+
 end Bptree
 
 end

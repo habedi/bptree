@@ -536,6 +536,33 @@ theorem insert_leaf_toList {V : Type} {maxKeys : Nat} {entries entries' : List (
     subst h
     simp [BPlusTree.toList, BPlusTree.leaves]
 
+/-- Non-splitting leaf insertion preserves height 1. -/
+theorem insertNode_leaf_non_split_height {V : Type} {maxKeys : Nat}
+    {entries : List (Nat × V)} {k : Nat} {v : V} {t' : BPlusTree Nat V}
+    (h : insertNode maxKeys (.leaf entries) k v = some (t', none)) :
+    t'.height = 1 := by
+  simp only [insertNode] at h
+  cases hent : insertEntries entries k v with
+  | none => simp [hent] at h
+  | some entries' =>
+    simp only [hent] at h
+    split_ifs at h
+    · simp at h
+    · simp only [Option.some.injEq, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, _⟩
+      rfl
+
+/-- A root split increases the height of the left subtree by 1. -/
+theorem insert_split_root_height {V : Type} (t r : BPlusTree Nat V) (p : Nat) :
+    (BPlusTree.internal [p] [t, r]).height = t.height + 1 := by
+  simp [BPlusTree.height]
+  omega
+
+/-- A root split sums the element counts of both new root children. -/
+theorem insert_split_root_count {V : Type} (t r : BPlusTree Nat V) (p : Nat) :
+    (BPlusTree.internal [p] [t, r]).count = t.count + r.count := by
+  simp [BPlusTree.count]
+
 end Bptree
 
 end

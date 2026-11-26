@@ -369,6 +369,65 @@ theorem checkNodeSorted_sound {V : Type} :
       · exact hmem x (by simp) hlist.1
       · exact ih hlist.2 (fun y hy hyb => hmem y (by simp [hy]) hyb) x hx_cs
 
+/-- Soundness of `checkAdjacentSeps` with respect to adjacent child min/max keys. -/
+theorem checkAdjacentSeps_sound {V : Type} :
+    {keys : List Nat} → {children : List (BPlusTree Nat V)} →
+    checkAdjacentSeps keys children = true →
+    ∀ (i : Nat) (hi : i < keys.length) (hl : i < children.length) (hr : i + 1 < children.length),
+      (∃ m, maxKey children[i] = some m ∧ m < keys[i]) ∧
+      minKey children[i + 1] = some keys[i]
+  | [], _, _, _, hi, _, _ => by simp at hi
+  | _ :: _, [], h, _, _, _, _ => by simp [checkAdjacentSeps] at h
+  | _ :: _, [_], h, _, _, _, _ => by simp [checkAdjacentSeps] at h
+  | k :: ks, c0 :: c1 :: cs, h, 0, _, _, _ => by
+    simp only [checkAdjacentSeps, Bool.and_eq_true] at h
+    rcases h with ⟨hpair, _⟩
+    cases hmx : maxKey c0 with
+    | none => simp [hmx] at hpair
+    | some mx =>
+      cases hmn : minKey c1 with
+      | none => simp [hmx, hmn] at hpair
+      | some mn =>
+        simp only [hmx, hmn, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hpair
+        rcases hpair with ⟨hlt, heq⟩
+        subst heq
+        exact ⟨⟨mx, hmx, hlt⟩, hmn⟩
+  | k :: ks, c0 :: c1 :: cs, h, i + 1, hi, hl, hr => by
+    simp only [checkAdjacentSeps, Bool.and_eq_true] at h
+    simp only [List.length_cons] at hi hl hr
+    have hrec := checkAdjacentSeps_sound h.2 i (by omega) (by simp; omega) (by simp; omega)
+    simpa [List.getElem_cons_succ] using hrec
+
+/-- Soundness of `checkSeparators` with respect to `SeparatorsValid`. -/
+theorem checkSeparators_sound {V : Type} :
+    (t : BPlusTree Nat V) → checkSeparators t = true → SeparatorsValid t
+  | .leaf _, _ => by simp [SeparatorsValid]
+  | .internal keys children, h => by
+    simp only [checkSeparators, Bool.and_eq_true] at h
+    rcases h with ⟨hlist, hadj⟩
+    simp only [SeparatorsValid]
+    refine ⟨?_, checkAdjacentSeps_sound hadj⟩
+    have hmem : ∀ c ∈ children, checkSeparators c = true → SeparatorsValid c :=
+      fun c _ hc => checkSeparators_sound c hc
+    clear checkSeparators_sound hadj
+    induction children with
+    | nil => simp
+    | cons c cs ih =>
+      simp only [checkSeparatorsList, Bool.and_eq_true] at hlist
+      intro x hx
+      rcases List.mem_cons.mp hx with rfl | hx_cs
+      · exact hmem x (by simp) hlist.1
+      · exact ih hlist.2 (fun y hy hyb => hmem y (by simp [hy]) hyb) x hx_cs
+
+/-- Master soundness theorem: passing `checkInvariants` implies full `Valid` invariants. -/
+theorem checkInvariants_sound {V : Type} {maxKeys : Nat} {t : BPlusTree Nat V}
+    (h : checkInvariants maxKeys t = true) : Valid maxKeys t := by
+  simp only [checkInvariants, Bool.and_eq_true] at h
+  rcases h with ⟨⟨⟨⟨⟨hcap, hsort⟩, hch⟩, hocc⟩, hdepth⟩, hsep⟩
+  exact ⟨checkCapacity_iff.mp hcap, checkNodeSorted_sound t hsort, checkChildCount_sound t hch,
+    checkRootOccupancy_sound t hocc, checkUniformDepth_sound t t.height hdepth,
+    checkSeparators_sound t hsep⟩
+
 end Bptree
 
 end

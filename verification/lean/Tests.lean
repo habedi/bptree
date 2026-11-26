@@ -100,5 +100,8 @@ private meta def sampleAfterRemoves : Except Status (BPlusTree Nat Nat) := do
 example : Valid 3 (empty Nat Nat) :=
   valid_empty Nat ⟨by decide, by decide⟩
 
+example : Valid 3 (empty Nat Nat) :=
+  checkInvariants_sound (by decide)
+
 example : lookup (empty Nat Nat) 7 = none :=
   lookup_empty Nat 7

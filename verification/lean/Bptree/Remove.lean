@@ -358,6 +358,139 @@ theorem mergeInternal_bounds {maxKeys : Nat} {leftKeys rightKeys : List Nat}
   simp only [hl, hr, minInternalKeys]
   omega
 
+/-- Removing `k` from `entries` does not alter lookups for any other key `k' ≠ k`. -/
+theorem leafLookup_removeEntries_ne {V : Type} {entries entries' : List (Nat × V)}
+    {k k' : Nat} {b : Bool} (hne : k' ≠ k)
+    (h : removeEntries entries k = some (entries', b)) :
+    leafLookup entries' k' = leafLookup entries k' := by
+  induction entries generalizing entries' b with
+  | nil => simp [removeEntries] at h
+  | cons hd tl ih =>
+    rcases hd with ⟨kh, vh⟩
+    simp only [removeEntries] at h
+    by_cases hkk : k == kh
+    · simp only [hkk, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, _⟩
+      have hkeq : k = kh := beq_iff_eq.mp hkk
+      subst hkeq
+      have hbeq : (k' == k) = false := beq_false_of_ne hne
+      simp [leafLookup, hbeq]
+    · simp only [hkk, Bool.false_eq_true, ↓reduceIte] at h
+      split at h
+      · simp at h
+      · rename_i rest' b' hrec
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, _⟩
+        simp only [leafLookup]
+        by_cases hkh : k' == kh
+        · simp [hkh]
+        · simp only [hkh, Bool.false_eq_true, ↓reduceIte]
+          exact ih hrec
+
+/-- Splitting the last element of a list preserves the original list on append. -/
+theorem splitLast?_append_eq {α : Type} {xs init : List α} {last : α}
+    (h : splitLast? xs = some (init, last)) : init ++ [last] = xs := by
+  induction xs generalizing init with
+  | nil => simp [splitLast?] at h
+  | cons x xs ih =>
+    cases xs with
+    | nil =>
+      simp only [splitLast?, Option.some.injEq, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, rfl⟩
+      rfl
+    | cons y ys =>
+      simp only [splitLast?] at h
+      split at h
+      · simp at h
+      · rename_i init' last' hrec
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, rfl⟩
+        simp [ih hrec]
+
+/-- Splitting the last element decreases list length by 1. -/
+theorem splitLast?_length {α : Type} {xs init : List α} {last : α}
+    (h : splitLast? xs = some (init, last)) : init.length + 1 = xs.length := by
+  have happ := splitLast?_append_eq h
+  have hlen := congrArg List.length happ
+  simp only [List.length_append, List.length_singleton] at hlen
+  exact hlen
+
+/-- Borrowing the last entry from a left leaf preserves the concatenated entry sequence. -/
+theorem borrowLeft_leaf_append {V : Type} {left leftInit right : List (Nat × V)}
+    {lastEntry : Nat × V} (h : splitLast? left = some (leftInit, lastEntry)) :
+    leftInit ++ (lastEntry :: right) = left ++ right := by
+  have happ := splitLast?_append_eq h
+  rw [← happ, List.append_assoc]
+  rfl
+
+/-- Borrowing the first entry from a right leaf preserves the concatenated entry sequence. -/
+theorem borrowRight_leaf_append {V : Type} (left : List (Nat × V)) (r0 : Nat × V)
+    (rRest : List (Nat × V)) :
+    (left ++ [r0]) ++ rRest = left ++ (r0 :: rRest) := by
+  simp
+
+/-- Borrowing from a left leaf with `> minLeafKeys` keys restores occupancy to
+    `[minLeafKeys, maxKeys]` for both leaves. -/
+theorem borrowLeft_leaf_bounds {V : Type} {maxKeys : Nat} {left leftInit child : List (Nat × V)}
+    {lastEntry : Nat × V} (hcap : 3 ≤ maxKeys)
+    (hleft_lo : minLeafKeys maxKeys < left.length) (hleft_hi : left.length ≤ maxKeys)
+    (hchild : child.length = minLeafKeys maxKeys - 1)
+    (hsplit : splitLast? left = some (leftInit, lastEntry)) :
+    (minLeafKeys maxKeys ≤ leftInit.length ∧ leftInit.length ≤ maxKeys) ∧
+    (minLeafKeys maxKeys ≤ (lastEntry :: child).length ∧
+      (lastEntry :: child).length ≤ maxKeys) := by
+  have hlen := splitLast?_length hsplit
+  have hmin := minLeafKeys_pos hcap
+  have hle := minLeafKeys_le_maxKeys hcap
+  simp only [List.length_cons]
+  omega
+
+/-- Borrowing from a right leaf with `> minLeafKeys` keys restores occupancy to
+    `[minLeafKeys, maxKeys]` for both leaves. -/
+theorem borrowRight_leaf_bounds {V : Type} {maxKeys : Nat} {child rRest : List (Nat × V)}
+    {r0 : Nat × V} (hcap : 3 ≤ maxKeys)
+    (hright_lo : minLeafKeys maxKeys < (r0 :: rRest).length)
+    (hright_hi : (r0 :: rRest).length ≤ maxKeys)
+    (hchild : child.length = minLeafKeys maxKeys - 1) :
+    (minLeafKeys maxKeys ≤ (child ++ [r0]).length ∧ (child ++ [r0]).length ≤ maxKeys) ∧
+    (minLeafKeys maxKeys ≤ rRest.length ∧ rRest.length ≤ maxKeys) := by
+  have hmin := minLeafKeys_pos hcap
+  have hle := minLeafKeys_le_maxKeys hcap
+  simp only [List.length_append, List.length_cons, List.length_nil] at hright_lo hright_hi ⊢
+  omega
+
+/-- Borrowing from a left internal sibling with `> minInternalKeys` keys restores occupancy to
+    `[minInternalKeys, maxKeys]` for both internal nodes. -/
+theorem borrowLeft_internal_bounds {maxKeys : Nat} {leftKeys leftInit childKeys : List Nat}
+    {lastKey sep : Nat} (hcap : 3 ≤ maxKeys)
+    (hleft_lo : minInternalKeys maxKeys < leftKeys.length)
+    (hleft_hi : leftKeys.length ≤ maxKeys)
+    (hchild : childKeys.length = minInternalKeys maxKeys - 1)
+    (hsplit : splitLast? leftKeys = some (leftInit, lastKey)) :
+    (minInternalKeys maxKeys ≤ leftInit.length ∧ leftInit.length ≤ maxKeys) ∧
+    (minInternalKeys maxKeys ≤ (sep :: childKeys).length ∧
+      (sep :: childKeys).length ≤ maxKeys) := by
+  have hlen := splitLast?_length hsplit
+  have hmin := minInternalKeys_pos hcap
+  have hle := minInternalKeys_le_maxKeys hcap
+  simp only [List.length_cons]
+  omega
+
+/-- Borrowing from a right internal sibling with `> minInternalKeys` keys restores occupancy to
+    `[minInternalKeys, maxKeys]` for both internal nodes. -/
+theorem borrowRight_internal_bounds {maxKeys : Nat} {childKeys rRest : List Nat}
+    {rk0 sep : Nat} (hcap : 3 ≤ maxKeys)
+    (hright_lo : minInternalKeys maxKeys < (rk0 :: rRest).length)
+    (hright_hi : (rk0 :: rRest).length ≤ maxKeys)
+    (hchild : childKeys.length = minInternalKeys maxKeys - 1) :
+    (minInternalKeys maxKeys ≤ (childKeys ++ [sep]).length ∧
+      (childKeys ++ [sep]).length ≤ maxKeys) ∧
+    (minInternalKeys maxKeys ≤ rRest.length ∧ rRest.length ≤ maxKeys) := by
+  have hmin := minInternalKeys_pos hcap
+  have hle := minInternalKeys_le_maxKeys hcap
+  simp only [List.length_append, List.length_cons, List.length_nil] at hright_lo hright_hi ⊢
+  omega
+
 end Bptree
 
 end

@@ -41,6 +41,14 @@ private def runRemoveStep (maxKeys : Nat) (tree : BPlusTree Nat Nat) (stepIdx k 
     IO.println s!"STEP {stepIdx} DEL {k} -> {formatStatus st} count={tree.count} height={tree.height} nodes={tree.nodeCount} tree={tree.serialize}"
     return tree
 
+private def runClearStep (maxKeys : Nat) (tree : BPlusTree Nat Nat) (stepIdx : Nat) :
+    IO (BPlusTree Nat Nat) := do
+  let t' := clear Nat Nat tree
+  if !checkInvariants maxKeys t' then
+    throw (IO.userError "Lean invariant check failed after CLEAR")
+  IO.println s!"STEP {stepIdx} CLEAR -> OK count={t'.count} height={t'.height} nodes={t'.nodeCount} tree={t'.serialize}"
+  return t'
+
 private def runQueries (tree : BPlusTree Nat Nat) : IO Unit := do
   let iterItems := (iterList tree).map (fun p => s!"{p.1}:{p.2}")
   IO.println s!"QUERY ITER -> [{String.intercalate "," iterItems}]"
@@ -54,6 +62,9 @@ private def runQueries (tree : BPlusTree Nat Nat) : IO Unit := do
     | none => IO.println s!"QUERY UB {k} -> END"
   for i in List.range 20 do
     let k := i * 3 + 1
+    match iterFind tree k with
+    | some (k', v') => IO.println s!"QUERY FIND {k} -> {k'}:{v'}"
+    | none => IO.println s!"QUERY FIND {k} -> END"
     match lookup tree k with
     | some v => IO.println s!"QUERY GET {k} -> FOUND {v}"
     | none => IO.println s!"QUERY GET {k} -> NOT_FOUND"
@@ -64,7 +75,7 @@ private def runQueries (tree : BPlusTree Nat Nat) : IO Unit := do
     IO.println s!"QUERY RANGE {lo} {hi} -> [{String.intercalate "," vals}]"
 
 def main : IO Unit := do
-  let orders := [3, 4, 7, 12]
+  let orders := [3, 4, 5, 6, 7, 8, 12]
   for maxKeys in orders do
     -- Workload 1: Sequential + duplicates
     IO.println s!"WORKLOAD sequential max_keys={maxKeys}"
@@ -123,3 +134,30 @@ def main : IO Unit := do
       let k := ((rng >>> 16) % 60).toNat + 1
       t3 ← runRemoveStep maxKeys t3 (100 + s) k
     runQueries t3
+
+    -- Workload 4: Interleaved PUT/DEL + CLEAR + post-CLEAR wave
+    IO.println s!"WORKLOAD interleaved_clear max_keys={maxKeys}"
+    let mut t4 : BPlusTree Nat Nat := empty Nat Nat
+    let mut rng4 : UInt64 := 1337
+    for s in List.range 200 do
+      rng4 := nextRand rng4
+      let op := ((rng4 >>> 8) % 5).toNat
+      rng4 := nextRand rng4
+      let k := ((rng4 >>> 16) % 50).toNat + 1
+      if op < 3 then
+        t4 ← runStep maxKeys t4 s k (k * 100 + s)
+      else
+        t4 ← runRemoveStep maxKeys t4 s k
+    runQueries t4
+    t4 ← runClearStep maxKeys t4 200
+    runQueries t4
+    for s in List.range 40 do
+      rng4 := nextRand rng4
+      let op := ((rng4 >>> 8) % 5).toNat
+      rng4 := nextRand rng4
+      let k := ((rng4 >>> 16) % 50).toNat + 1
+      if op < 3 then
+        t4 ← runStep maxKeys t4 (201 + s) k (k * 100 + s)
+      else
+        t4 ← runRemoveStep maxKeys t4 (201 + s) k
+    runQueries t4

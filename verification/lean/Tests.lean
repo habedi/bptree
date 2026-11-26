@@ -86,7 +86,10 @@ private meta def sampleAfterRemoves : Except Status (BPlusTree Nat Nat) := do
     lowerBound t 30 == some (30, 300) &&
     lowerBound t 51 == none &&
     upperBound t 30 == some (40, 400) &&
-    upperBound t 50 == none
+    upperBound t 50 == none &&
+    iterFind t 30 == some (30, 300) &&
+    iterFind t 25 == none &&
+    (clear Nat Nat t).serialize == "(leaf [])"
   | .error _ => false
 
 #guard match sampleAfterRemoves with

@@ -54,6 +54,10 @@ def upperBound {V : Type} (t : BPlusTree Nat V) (k : Nat) : Option (Nat × V) :=
 def iterList {V : Type} (t : BPlusTree Nat V) : List (Nat × V) :=
   t.toList
 
+/-- Return the `(key, value)` pair if `k` is in `t`, matching `bptree_iter_find`. -/
+def iterFind {V : Type} (t : BPlusTree Nat V) (k : Nat) : Option (Nat × V) :=
+  (lookup t k).map (fun v => (k, v))
+
 /-- Lookup on an empty tree always returns `none`. -/
 theorem lookup_empty (V : Type) (k : Nat) : lookup (empty Nat V) k = none := by
   simp [empty, lookup, leafLookup]
@@ -168,6 +172,21 @@ theorem upperBound_mem {V : Type} {t : BPlusTree Nat V} {k k' : Nat} {v : V}
 theorem upperBound_eq_lowerBound_succ {V : Type} (t : BPlusTree Nat V) (k : Nat) :
     upperBound t k = lowerBound t (k + 1) := by
   rfl
+
+/-- `iterFind` on an empty tree always returns `none`. -/
+theorem iterFind_empty (V : Type) (k : Nat) :
+    iterFind (empty Nat V) k = none := by
+  simp [iterFind, lookup_empty]
+
+/-- `iterFind t k = some p` iff `p.1 = k` and `lookup t k = some p.2`. -/
+theorem iterFind_eq_some_iff {V : Type} (t : BPlusTree Nat V) (k : Nat) (p : Nat × V) :
+    iterFind t k = some p ↔ p.1 = k ∧ lookup t k = some p.2 := by
+  simp only [iterFind, Option.map_eq_some_iff]
+  constructor
+  · rintro ⟨v, hv, rfl⟩
+    exact ⟨rfl, hv⟩
+  · rintro ⟨hk, hv⟩
+    exact ⟨p.2, hv, by ext <;> simp [hk]⟩
 
 end Bptree
 

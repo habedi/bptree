@@ -549,6 +549,37 @@ theorem remove_not_found_of_lookup {V : Type} (maxKeys : Nat) {t : BPlusTree Nat
   | internal keys children =>
     simp only [remove, removeNode_not_found_of_lookup maxKeys _ hlook]
 
+/-- Merging two sorted leaves where all left keys are strictly less than all right keys
+    preserves `EntriesSorted`. -/
+theorem mergeLeaf_preserves_sorted {V : Type} {left right : List (Nat × V)}
+    (hsort_left : EntriesSorted left) (hsort_right : EntriesSorted right)
+    (hlt : ∀ x ∈ left, ∀ y ∈ right, x.1 < y.1) :
+    EntriesSorted (left ++ right) := by
+  simp only [EntriesSorted, List.map_append, List.pairwise_append]
+  refine ⟨hsort_left, hsort_right, ?_⟩
+  intro a ha b hb
+  rcases List.mem_map.mp ha with ⟨x, hx, rfl⟩
+  rcases List.mem_map.mp hb with ⟨y, hy, rfl⟩
+  exact hlt x hx y hy
+
+/-- Merging two sorted internal key lists with a separator key `sep` strictly between them
+    preserves `KeysSorted`. -/
+theorem mergeInternal_preserves_sorted {leftKeys rightKeys : List Nat} {sep : Nat}
+    (hsort_left : KeysSorted leftKeys) (hsort_right : KeysSorted rightKeys)
+    (hleft_sep : ∀ x ∈ leftKeys, x < sep) (hsep_right : ∀ y ∈ rightKeys, sep < y) :
+    KeysSorted (leftKeys ++ [sep] ++ rightKeys) := by
+  simp only [KeysSorted, List.pairwise_append, List.pairwise_cons, List.mem_singleton]
+  refine ⟨⟨hsort_left, ⟨fun y hy => by simp at hy, List.Pairwise.nil⟩, ?_⟩, hsort_right, ?_⟩
+  · intro a ha b hb
+    subst hb
+    exact hleft_sep a ha
+  · intro a ha b hb
+    rcases List.mem_append.mp ha with ha_l | ha_s
+    · exact Nat.lt_trans (hleft_sep a ha_l) (hsep_right b hb)
+    · simp only [List.mem_singleton] at ha_s
+      subst ha_s
+      exact hsep_right b hb
+
 end Bptree
 
 end

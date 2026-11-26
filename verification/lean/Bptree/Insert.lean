@@ -429,6 +429,52 @@ theorem insert_duplicate_of_lookup {V : Type} (maxKeys : Nat) {t : BPlusTree Nat
     insert maxKeys t k v = .error .duplicateKey := by
   simp [insert, insertNode_duplicate_of_lookup maxKeys t hsort hlook]
 
+/-- When an overflowing leaf splits, the promoted separator key equals `minKey` of the right leaf. -/
+theorem splitLeafEntries_promoted_eq_min {V : Type} {maxKeys : Nat} {entries : List (Nat × V)}
+    (hcap : 3 ≤ maxKeys) (hlen : entries.length = maxKeys + 1) :
+    let (_, promoted, right) := splitLeafEntries entries
+    minKey (.leaf right) = some promoted := by
+  simp only [splitLeafEntries, minKey]
+  have hpos : 0 < (entries.drop ((entries.length + 1) / 2)).length := by
+    simp only [List.length_drop, hlen]
+    omega
+  cases hhead : (entries.drop ((entries.length + 1) / 2)).head? with
+  | none =>
+    have hempty := List.head?_eq_none_iff.mp hhead
+    simp [hempty] at hpos
+  | some p =>
+    simp [Option.map]
+
+/-- Every key in the left half of a sorted leaf split is strictly less than the promoted key
+    (when the right half starts with `(promoted, vRight)`). -/
+theorem splitLeafEntries_left_lt_promoted {V : Type} {entries : List (Nat × V)}
+    {promoted : Nat} {vRight : V} {rest : List (Nat × V)} {p : Nat × V}
+    (hsort : EntriesSorted entries)
+    (hp : p ∈ (splitLeafEntries entries).1)
+    (hright : (splitLeafEntries entries).2.2 = (promoted, vRight) :: rest) :
+    p.1 < promoted := by
+  have happ : (splitLeafEntries entries).1 ++ (splitLeafEntries entries).2.2 = entries :=
+    splitLeafEntries_append entries
+  rw [← happ, hright] at hsort
+  simp only [EntriesSorted, List.map_append, List.map_cons, List.pairwise_append] at hsort
+  exact hsort.2.2 p.1 (List.mem_map.mpr ⟨p, hp, rfl⟩) promoted (by simp)
+
+/-- The left key list of an internal split preserves `KeysSorted`. -/
+theorem splitInternal_left_sorted {V : Type} {keys : List Nat}
+    {children : List (BPlusTree Nat V)} (defaultK : Nat)
+    (hsort : KeysSorted keys) :
+    KeysSorted (splitInternalNodes keys children defaultK).1.1 := by
+  simp only [splitInternalNodes, KeysSorted]
+  exact hsort.sublist (List.take_sublist _ _)
+
+/-- The right key list of an internal split preserves `KeysSorted`. -/
+theorem splitInternal_right_sorted {V : Type} {keys : List Nat}
+    {children : List (BPlusTree Nat V)} (defaultK : Nat)
+    (hsort : KeysSorted keys) :
+    KeysSorted (splitInternalNodes keys children defaultK).2.2.1 := by
+  simp only [splitInternalNodes, KeysSorted]
+  exact hsort.sublist (List.drop_sublist _ _)
+
 end Bptree
 
 end

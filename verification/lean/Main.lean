@@ -23,6 +23,16 @@ private def runStep (maxKeys : Nat) (tree : BPlusTree Nat Nat) (stepIdx k v : Na
     IO.println s!"STEP {stepIdx} PUT {k} {v} -> {formatStatus st} count={tree.count} height={tree.height} nodes={tree.nodeCount} tree={tree.serialize}"
     return tree
 
+private def runRemoveStep (maxKeys : Nat) (tree : BPlusTree Nat Nat) (stepIdx k : Nat) :
+    IO (BPlusTree Nat Nat) := do
+  match remove maxKeys tree k with
+  | .ok t' =>
+    IO.println s!"STEP {stepIdx} DEL {k} -> OK count={t'.count} height={t'.height} nodes={t'.nodeCount} tree={t'.serialize}"
+    return t'
+  | .error st =>
+    IO.println s!"STEP {stepIdx} DEL {k} -> {formatStatus st} count={tree.count} height={tree.height} nodes={tree.nodeCount} tree={tree.serialize}"
+    return tree
+
 private def runQueries (tree : BPlusTree Nat Nat) : IO Unit := do
   for i in List.range 20 do
     let k := i * 3 + 1
@@ -51,6 +61,19 @@ def main : IO Unit := do
       t1 ← runStep maxKeys t1 step k (k * 10 + 1)
       step := step + 1
     runQueries t1
+    for i in List.range 20 do
+      let k := (i + 1) * 2
+      t1 ← runRemoveStep maxKeys t1 step k
+      step := step + 1
+    for i in List.range 14 do
+      let k := i * 3 + 1
+      t1 ← runRemoveStep maxKeys t1 step k
+      step := step + 1
+    for i in List.range 40 do
+      let k := i + 1
+      t1 ← runRemoveStep maxKeys t1 step k
+      step := step + 1
+    runQueries t1
 
     -- Workload 2: Reverse
     IO.println s!"WORKLOAD reverse max_keys={maxKeys}"
@@ -59,6 +82,11 @@ def main : IO Unit := do
     for i in List.range 40 do
       let k := 40 - i
       t2 ← runStep maxKeys t2 step k (k * 10)
+      step := step + 1
+    runQueries t2
+    for i in List.range 40 do
+      let k := 40 - i
+      t2 ← runRemoveStep maxKeys t2 step k
       step := step + 1
     runQueries t2
 
@@ -71,4 +99,9 @@ def main : IO Unit := do
       let k := ((rng >>> 16) % 60).toNat + 1
       let v := k * 100 + s
       t3 ← runStep maxKeys t3 s k v
+    runQueries t3
+    for s in List.range 80 do
+      rng := nextRand rng
+      let k := ((rng >>> 16) % 60).toNat + 1
+      t3 ← runRemoveStep maxKeys t3 (100 + s) k
     runQueries t3

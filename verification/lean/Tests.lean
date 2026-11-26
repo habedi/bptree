@@ -57,6 +57,23 @@ private meta def sampleTree : Except Status (BPlusTree Nat Nat) := do
   | .ok t => t.serialize == "(internal [30] [(leaf [10:100,20:200]),(leaf [30:300,40:400,50:500])])"
   | .error _ => false
 
+-- Deletion and rebalancing checks
+#guard match remove 3 (empty Nat Nat) 10 with
+  | .error .keyNotFound => true
+  | _ => false
+
+private meta def sampleAfterRemoves : Except Status (BPlusTree Nat Nat) := do
+  let t ← sampleTree
+  let t1 ← remove 3 t 10
+  let t2 ← remove 3 t1 30
+  let t3 ← remove 3 t2 20
+  let t4 ← remove 3 t3 40
+  remove 3 t4 50
+
+#guard match sampleAfterRemoves with
+  | .ok t => t.count == 0 && t.height == 1 && t.serialize == "(leaf [])"
+  | .error _ => false
+
 -- Verified theorem instantiations
 example : Valid 3 (empty Nat Nat) :=
   valid_empty Nat ⟨by decide, by decide⟩

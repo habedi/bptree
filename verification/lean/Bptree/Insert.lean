@@ -188,6 +188,33 @@ theorem leafLookup_insertEntries_self {V : Type} {entries entries' : List (Nat �
       simp only [leafLookup, hkk, Bool.false_eq_true, ↓reduceIte]
       exact ih htl'
 
+/-- Inserting `(k, v)` into `entries` does not alter lookups for any other key `k' ≠ k`. -/
+theorem leafLookup_insertEntries_ne {V : Type} {entries entries' : List (Nat × V)}
+    {k k' : Nat} {v : V} (hne : k' ≠ k) (h : insertEntries entries k v = some entries') :
+    leafLookup entries' k' = leafLookup entries k' := by
+  induction entries generalizing entries' with
+  | nil =>
+    simp [insertEntries] at h
+    subst h
+    have hbeq : (k' == k) = false := beq_false_of_ne hne
+    simp [leafLookup, hbeq]
+  | cons hd tl ih =>
+    rcases hd with ⟨kh, vh⟩
+    simp only [insertEntries] at h
+    split_ifs at h with hlt hkk
+    · injection h with h'
+      subst h'
+      have hbeq : (k' == k) = false := beq_false_of_ne hne
+      simp [leafLookup, hbeq]
+    · simp only [Option.map_eq_some_iff] at h
+      rcases h with ⟨tl', htl', hcons⟩
+      subst hcons
+      simp only [leafLookup]
+      by_cases hkh : k' == kh
+      · simp [hkh]
+      · simp only [hkh, Bool.false_eq_true, ↓reduceIte]
+        exact ih htl'
+
 /-- Keys in `insertEntries` are strictly a superset of `entries`'s keys plus `k`. -/
 private theorem mem_insertEntries_iff {V : Type} {entries entries' : List (Nat × V)}
     {k : Nat} {v : V} (h : insertEntries entries k v = some entries') (p : Nat × V) :

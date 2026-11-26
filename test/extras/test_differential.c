@@ -66,6 +66,16 @@ static void run_step(bptree* tree, int step_idx, int64_t k, int64_t v) {
     putchar('\n');
 }
 
+static void run_remove_step(bptree* tree, int step_idx, int64_t k) {
+    bptree_status st = bptree_remove(tree, &k);
+    assert(bptree_check_invariants(tree));
+    bptree_stats stats = bptree_get_stats(tree);
+    printf("STEP %d DEL %" PRId64 " -> %s count=%d height=%d nodes=%d tree=",
+           step_idx, k, format_status(st), stats.count, stats.height, stats.node_count);
+    serialize_node(tree, tree->root, stdout);
+    putchar('\n');
+}
+
 static void run_queries(const bptree* tree) {
     for (int i = 0; i < 20; i++) {
         int64_t k = (int64_t)(i * 3 + 1);
@@ -115,6 +125,19 @@ int main(void) {
             run_step(t1, step++, k, k * 10 + 1);
         }
         run_queries(t1);
+        for (int i = 0; i < 20; i++) {
+            int64_t k = (i + 1) * 2;
+            run_remove_step(t1, step++, k);
+        }
+        for (int i = 0; i < 14; i++) {
+            int64_t k = i * 3 + 1;
+            run_remove_step(t1, step++, k);
+        }
+        for (int i = 0; i < 40; i++) {
+            int64_t k = i + 1;
+            run_remove_step(t1, step++, k);
+        }
+        run_queries(t1);
         bptree_free(t1);
 
         // Workload 2: Reverse
@@ -125,6 +148,11 @@ int main(void) {
         for (int i = 0; i < 40; i++) {
             int64_t k = 40 - i;
             run_step(t2, step++, k, k * 10);
+        }
+        run_queries(t2);
+        for (int i = 0; i < 40; i++) {
+            int64_t k = 40 - i;
+            run_remove_step(t2, step++, k);
         }
         run_queries(t2);
         bptree_free(t2);
@@ -139,6 +167,12 @@ int main(void) {
             int64_t k = (int64_t)((rng >> 16) % 60) + 1;
             int64_t v = k * 100 + s;
             run_step(t3, s, k, v);
+        }
+        run_queries(t3);
+        for (int s = 0; s < 80; s++) {
+            rng = next_rand(rng);
+            int64_t k = (int64_t)((rng >> 16) % 60) + 1;
+            run_remove_step(t3, 100 + s, k);
         }
         run_queries(t3);
         bptree_free(t3);

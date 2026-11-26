@@ -138,3 +138,13 @@ example {t : BPlusTree Nat Nat} (hsort : NodeSorted t) (hcc : ChildCountValid t)
     (hord : SubtreesOrdered t) (k : Nat) :
     contains t k = true ↔ ∃ v, (k, v) ∈ t.toList :=
   contains_eq_true_iff_exists_mem_toList hsort hcc hord
+
+example {t t' : BPlusTree Nat Nat} (k v : Nat) (h : insert 3 t k v = .ok t')
+    (p : Nat × Nat) :
+    p ∈ t'.toList ↔ p = (k, v) ∨ p ∈ t.toList :=
+  insert_mem_toList_iff h p
+
+example {t t' : BPlusTree Nat Nat} (hsort : NodeSorted t) (hcc : ChildCountValid t)
+    (hord : SubtreesOrdered t) (k : Nat) (h : remove 3 t k = .ok t') (x : Nat × Nat) :
+    x ∈ t'.toList ↔ x ∈ t.toList ∧ x.1 ≠ k :=
+  remove_mem_toList_iff hsort hcc hord h x

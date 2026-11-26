@@ -182,6 +182,17 @@ theorem count_eq_toList_length {K V : Type} : (t : BPlusTree K V) →
       simp only [List.length_flatten] at hc hcs
       omega
 
+/-- The `toList` of an internal node is the concatenation of its children's `toList`s. -/
+theorem toList_internal_eq_flatMap {K V : Type} (keys : List K)
+    (children : List (BPlusTree K V)) :
+    (BPlusTree.internal keys children).toList = children.flatMap BPlusTree.toList := by
+  simp only [BPlusTree.toList, BPlusTree.leaves]
+  induction children with
+  | nil => simp
+  | cons c cs ih =>
+    simp only [List.flatMap_cons, List.flatten_append, ih]
+    rfl
+
 end Bptree
 
 end

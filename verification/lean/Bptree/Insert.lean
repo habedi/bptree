@@ -1242,6 +1242,172 @@ theorem insert_preserves_RootOccupancy {V : Type} {maxKeys : Nat}
             simp only [RootOccupancy]
             refine ⟨by omega, by omega, hmem_c'⟩
 
+/-- Splitting an internal node preserves the concatenated `toList` of both halves. -/
+theorem splitInternalNodes_toList_append {K V : Type} (keys : List K)
+    (children : List (BPlusTree K V)) (defaultK : K) :
+    let ((lk, lc), _, (rk, rc)) := splitInternalNodes keys children defaultK
+    (BPlusTree.internal lk lc).toList ++ (BPlusTree.internal rk rc).toList =
+      (BPlusTree.internal keys children).toList := by
+  simp only [toList_internal_eq_flatMap]
+  rw [← List.flatMap_append]
+  have h := splitInternal_children_append keys children defaultK
+  dsimp only at h
+  rw [h]
+
+private theorem mem_flatMap_set_iff {K V : Type} {P : K × V → Prop} :
+    (xs : List (BPlusTree K V)) → {pos : Nat} → {c c' : BPlusTree K V} →
+    xs[pos]? = some c →
+    (∀ x : K × V, x ∈ c'.toList ↔ P x ∨ x ∈ c.toList) →
+    ∀ x : K × V,
+      x ∈ (xs.set pos c').flatMap BPlusTree.toList ↔ P x ∨ x ∈ xs.flatMap BPlusTree.toList
+  | [], _, _, _, h, _, _ => by simp at h
+  | y :: ys, 0, c, c', h, hc', x => by
+    simp only [List.getElem?_cons_zero, Option.some.injEq] at h
+    subst h
+    simp only [List.set_cons_zero, List.flatMap_cons, List.mem_append, hc']
+    tauto
+  | y :: ys, pos + 1, c, c', h, hc', x => by
+    simp only [List.getElem?_cons_succ] at h
+    have ih := mem_flatMap_set_iff ys h hc' x
+    simp only [List.set_cons_succ, List.flatMap_cons, List.mem_append] at ih ⊢
+    tauto
+
+private theorem mem_flatMap_set_or_iff {K V : Type} {P : K × V → Prop} :
+    (xs : List (BPlusTree K V)) → {pos : Nat} → {c c1 c2 : BPlusTree K V} →
+    xs[pos]? = some c →
+    (∀ x : K × V, x ∈ c1.toList ∨ x ∈ c2.toList ↔ P x ∨ x ∈ c.toList) →
+    ∀ x : K × V,
+      x ∈ c2.toList ∨ x ∈ (xs.set pos c1).flatMap BPlusTree.toList ↔
+        P x ∨ x ∈ xs.flatMap BPlusTree.toList
+  | [], _, _, _, _, h, _, _ => by simp at h
+  | y :: ys, 0, c, c1, c2, h, hc', x => by
+    simp only [List.getElem?_cons_zero, Option.some.injEq] at h
+    subst h
+    simp only [List.set_cons_zero, List.flatMap_cons, List.mem_append]
+    have hcx := hc' x
+    tauto
+  | y :: ys, pos + 1, c, c1, c2, h, hc', x => by
+    simp only [List.getElem?_cons_succ] at h
+    have ih := mem_flatMap_set_or_iff ys h hc' x
+    simp only [List.set_cons_succ, List.flatMap_cons, List.mem_append] at ih ⊢
+    tauto
+
+private theorem flatMap_take_append_drop_cons {K V : Type} (xs : List (BPlusTree K V)) (i : Nat)
+    (c2 : BPlusTree K V) (x : K × V) :
+    x ∈ (xs.take i ++ [c2] ++ xs.drop i).flatMap BPlusTree.toList ↔
+      x ∈ c2.toList ∨ x ∈ xs.flatMap BPlusTree.toList := by
+  have happ : (xs.take i).flatMap BPlusTree.toList ++ (xs.drop i).flatMap BPlusTree.toList =
+      xs.flatMap BPlusTree.toList := by
+    rw [← List.flatMap_append, List.take_append_drop]
+  simp only [List.flatMap_append, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+    List.mem_append]
+  rw [← happ]
+  simp only [List.mem_append]
+  tauto
+
+/-- Multi-level `toList` membership refinement for `insertNode`. -/
+theorem insertNode_mem_toList_iff {V : Type} (maxKeys : Nat) :
+    (t : BPlusTree Nat V) → {k : Nat} → {v : V} →
+    {t' : BPlusTree Nat V} → {split : Option (Nat × BPlusTree Nat V)} →
+    insertNode maxKeys t k v = some (t', split) →
+    ∀ p : Nat × V,
+      (match split with
+       | none => p ∈ t'.toList
+       | some (_, right) => p ∈ t'.toList ∨ p ∈ right.toList) ↔
+      (p = (k, v) ∨ p ∈ t.toList)
+  | .leaf entries, k, v, t', split, h, p => by
+    simp only [insertNode] at h
+    cases hent : insertEntries entries k v with
+    | none => simp [hent] at h
+    | some entries' =>
+      have hmem := mem_insertEntries_iff hent p
+      simp only [hent] at h
+      split_ifs at h
+      · simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, rfl⟩
+        have happ := splitLeafEntries_append entries'
+        dsimp only at happ
+        simp only [BPlusTree.toList, BPlusTree.leaves, List.flatten_cons, List.flatten_nil,
+          List.append_nil] at hmem ⊢
+        have hmem_app : p ∈ (splitLeafEntries entries').1 ∨
+            p ∈ (splitLeafEntries entries').2.2 ↔ p ∈ entries' := by
+          rw [← List.mem_append, happ]
+        exact hmem_app.trans hmem
+      · simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, rfl⟩
+        simpa [BPlusTree.toList, BPlusTree.leaves] using hmem
+  | .internal keys children, k, v, t', split, h, p => by
+    simp only [insertNode] at h
+    split at h
+    · simp at h
+    · rename_i child hc
+      have hmem : child ∈ children := List.mem_of_getElem? hc
+      split at h
+      · simp at h
+      · rename_i child' hrec
+        have ih := insertNode_mem_toList_iff maxKeys child hrec
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, rfl⟩
+        simp only [toList_internal_eq_flatMap]
+        exact mem_flatMap_set_iff children hc ih p
+      · rename_i child' promotedKey newChild hrec
+        have ih := insertNode_mem_toList_iff maxKeys child hrec
+        dsimp only at ih
+        have hchildren' : ∀ x : Nat × V,
+            x ∈ ((children.set (findChildIdx keys k) child').take (findChildIdx keys k + 1) ++
+              [newChild] ++
+              (children.set (findChildIdx keys k) child').drop (findChildIdx keys k + 1)).flatMap
+                BPlusTree.toList ↔
+            x = (k, v) ∨ x ∈ children.flatMap BPlusTree.toList := by
+          intro x
+          rw [flatMap_take_append_drop_cons]
+          exact mem_flatMap_set_or_iff children hc ih x
+        split_ifs at h
+        · simp only [Option.some.injEq, Prod.mk.injEq] at h
+          rcases h with ⟨rfl, rfl⟩
+          have happ := splitInternalNodes_toList_append
+            (keys.take (findChildIdx keys k) ++ [promotedKey] ++ keys.drop (findChildIdx keys k))
+            ((children.set (findChildIdx keys k) child').take (findChildIdx keys k + 1) ++
+              [newChild] ++
+              (children.set (findChildIdx keys k) child').drop (findChildIdx keys k + 1)) 0
+          dsimp only at happ ⊢
+          rw [← List.mem_append, happ, toList_internal_eq_flatMap, toList_internal_eq_flatMap]
+          exact hchildren' p
+        · simp only [Option.some.injEq, Prod.mk.injEq] at h
+          rcases h with ⟨rfl, rfl⟩
+          simp only [toList_internal_eq_flatMap]
+          exact hchildren' p
+  termination_by t => sizeOf t
+  decreasing_by
+    all_goals (
+      simp_wf
+      have hsz := List.sizeOf_lt_of_mem hmem
+      omega
+    )
+
+/-- Multi-level `toList` membership refinement for `insert`: `p ∈ t'.toList ↔ p = (k, v) ∨ p ∈ t.toList`. -/
+theorem insert_mem_toList_iff {V : Type} {maxKeys : Nat} {t t' : BPlusTree Nat V}
+    {k : Nat} {v : V} (h : insert maxKeys t k v = .ok t') (p : Nat × V) :
+    p ∈ t'.toList ↔ p = (k, v) ∨ p ∈ t.toList := by
+  simp only [insert] at h
+  cases hins : insertNode maxKeys t k v with
+  | none => simp [hins] at h
+  | some res =>
+    rcases res with ⟨t0, split⟩
+    have hmem := insertNode_mem_toList_iff maxKeys t hins p
+    cases split with
+    | none =>
+      simp only [hins, Except.ok.injEq] at h
+      subst h
+      exact hmem
+    | some pr =>
+      rcases pr with ⟨upKey, right⟩
+      simp only [hins, Except.ok.injEq] at h
+      subst h
+      simp only [toList_internal_eq_flatMap, List.flatMap_cons, List.flatMap_nil,
+        List.append_nil, List.mem_append]
+      exact hmem
+
 end Bptree
 
 end

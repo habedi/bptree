@@ -77,6 +77,32 @@ static void run_remove_step(bptree* tree, int step_idx, int64_t k) {
 }
 
 static void run_queries(const bptree* tree) {
+    printf("QUERY ITER -> [");
+    bool first = true;
+    for (bptree_iter it = bptree_iter_begin(tree); bptree_iter_valid(&it); bptree_iter_next(&it)) {
+        if (!first) putchar(',');
+        first = false;
+        printf("%" PRId64 ":%" PRId64, (int64_t)bptree_iter_key(&it),
+               (int64_t)bptree_iter_value(&it));
+    }
+    puts("]");
+    for (int i = 0; i < 10; i++) {
+        int64_t k = (int64_t)(i * 6);
+        bptree_iter lb = bptree_iter_lower_bound(tree, &k);
+        if (bptree_iter_valid(&lb)) {
+            printf("QUERY LB %" PRId64 " -> %" PRId64 ":%" PRId64 "\n", k,
+                   (int64_t)bptree_iter_key(&lb), (int64_t)bptree_iter_value(&lb));
+        } else {
+            printf("QUERY LB %" PRId64 " -> END\n", k);
+        }
+        bptree_iter ub = bptree_iter_upper_bound(tree, &k);
+        if (bptree_iter_valid(&ub)) {
+            printf("QUERY UB %" PRId64 " -> %" PRId64 ":%" PRId64 "\n", k,
+                   (int64_t)bptree_iter_key(&ub), (int64_t)bptree_iter_value(&ub));
+        } else {
+            printf("QUERY UB %" PRId64 " -> END\n", k);
+        }
+    }
     for (int i = 0; i < 20; i++) {
         int64_t k = (int64_t)(i * 3 + 1);
         int64_t v = 0;

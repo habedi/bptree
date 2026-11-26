@@ -76,6 +76,19 @@ private meta def sampleAfterRemoves : Except Status (BPlusTree Nat Nat) := do
   | .ok t => checkInvariants 3 t == true
   | .error _ => false
 
+-- Iterator lowerBound and upperBound checks
+#guard lowerBound (empty Nat Nat) 10 == none
+#guard upperBound (empty Nat Nat) 10 == none
+#guard match sampleTree with
+  | .ok t =>
+    lowerBound t 5 == some (10, 100) &&
+    lowerBound t 25 == some (30, 300) &&
+    lowerBound t 30 == some (30, 300) &&
+    lowerBound t 51 == none &&
+    upperBound t 30 == some (40, 400) &&
+    upperBound t 50 == none
+  | .error _ => false
+
 #guard match sampleAfterRemoves with
   | .ok t => t.count == 0 && t.height == 1 && t.serialize == "(leaf [])" && checkInvariants 3 t == true
   | .error _ => false

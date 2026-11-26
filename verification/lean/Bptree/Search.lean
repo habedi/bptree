@@ -42,6 +42,18 @@ def contains {V : Type} (t : BPlusTree Nat V) (k : Nat) : Bool :=
 def rangeQuery {V : Type} (t : BPlusTree Nat V) (startKey endKey : Nat) : List V :=
   ((t.toList).filter (fun p => startKey ≤ p.1 ∧ p.1 ≤ endKey)).map Prod.snd
 
+/-- First entry in `t.toList` with key `≥ k`, matching `bptree_iter_lower_bound`. -/
+def lowerBound {V : Type} (t : BPlusTree Nat V) (k : Nat) : Option (Nat × V) :=
+  t.toList.find? (fun p => decide (k ≤ p.1))
+
+/-- First entry in `t.toList` with key `> k`, matching `bptree_iter_upper_bound`. -/
+def upperBound {V : Type} (t : BPlusTree Nat V) (k : Nat) : Option (Nat × V) :=
+  t.toList.find? (fun p => decide (k < p.1))
+
+/-- Forward iterator traversal sequence, matching `bptree_iter_begin` and `bptree_iter_next`. -/
+def iterList {V : Type} (t : BPlusTree Nat V) : List (Nat × V) :=
+  t.toList
+
 /-- Lookup on an empty tree always returns `none`. -/
 theorem lookup_empty (V : Type) (k : Nat) : lookup (empty Nat V) k = none := by
   simp [empty, lookup, leafLookup]
@@ -103,6 +115,59 @@ theorem leafLookup_of_mem_sorted {V : Type} {entries : List (Nat × V)} {k : Nat
       have hbeq : (k == k') = false := beq_false_of_ne (Nat.ne_of_gt hne)
       simp only [leafLookup, hbeq, Bool.false_eq_true, ↓reduceIte]
       exact ih htl hmem_tl
+
+/-- `rangeQuery` on an empty tree returns `[]`. -/
+theorem rangeQuery_empty (V : Type) (lo hi : Nat) :
+    rangeQuery (empty Nat V) lo hi = [] := by
+  simp [rangeQuery, empty, BPlusTree.toList, BPlusTree.leaves]
+
+/-- Soundness and completeness of `rangeQuery` with respect to `t.toList` and `[lo, hi]`. -/
+theorem mem_rangeQuery_iff {V : Type} (t : BPlusTree Nat V) (lo hi : Nat) (v : V) :
+    v ∈ rangeQuery t lo hi ↔ ∃ k, (k, v) ∈ t.toList ∧ lo ≤ k ∧ k ≤ hi := by
+  simp only [rangeQuery, List.mem_map, List.mem_filter, decide_eq_true_eq, Prod.exists]
+  constructor
+  · rintro ⟨k, v', ⟨hmem, hlo, hhi⟩, rfl⟩
+    exact ⟨k, hmem, hlo, hhi⟩
+  · rintro ⟨k, hmem, hlo, hhi⟩
+    exact ⟨k, v, ⟨hmem, hlo, hhi⟩, rfl⟩
+
+/-- An inverted range (`hi < lo`) always produces an empty result list. -/
+theorem rangeQuery_gt {V : Type} (t : BPlusTree Nat V) {lo hi : Nat} (hgt : hi < lo) :
+    rangeQuery t lo hi = [] := by
+  simp only [rangeQuery, List.map_eq_nil_iff, List.filter_eq_nil_iff, decide_eq_true_eq]
+  intro p _ hp
+  omega
+
+/-- `lowerBound` on an empty tree always returns `none`. -/
+theorem lowerBound_empty (V : Type) (k : Nat) :
+    lowerBound (empty Nat V) k = none := by
+  simp [lowerBound, empty, BPlusTree.toList, BPlusTree.leaves]
+
+/-- `upperBound` on an empty tree always returns `none`. -/
+theorem upperBound_empty (V : Type) (k : Nat) :
+    upperBound (empty Nat V) k = none := by
+  simp [upperBound, empty, BPlusTree.toList, BPlusTree.leaves]
+
+/-- Soundness of `lowerBound`: any returned entry belongs to `t.toList` with key `≥ k`. -/
+theorem lowerBound_mem {V : Type} {t : BPlusTree Nat V} {k k' : Nat} {v : V}
+    (h : lowerBound t k = some (k', v)) : (k', v) ∈ t.toList ∧ k ≤ k' := by
+  have hfind := List.find?_some h
+  have hmem := List.mem_of_find?_eq_some h
+  simp only [decide_eq_true_eq] at hfind
+  exact ⟨hmem, hfind⟩
+
+/-- Soundness of `upperBound`: any returned entry belongs to `t.toList` with key `> k`. -/
+theorem upperBound_mem {V : Type} {t : BPlusTree Nat V} {k k' : Nat} {v : V}
+    (h : upperBound t k = some (k', v)) : (k', v) ∈ t.toList ∧ k < k' := by
+  have hfind := List.find?_some h
+  have hmem := List.mem_of_find?_eq_some h
+  simp only [decide_eq_true_eq] at hfind
+  exact ⟨hmem, hfind⟩
+
+/-- For `Nat` keys, `upperBound t k` is identical to `lowerBound t (k + 1)`. -/
+theorem upperBound_eq_lowerBound_succ {V : Type} (t : BPlusTree Nat V) (k : Nat) :
+    upperBound t k = lowerBound t (k + 1) := by
+  rfl
 
 end Bptree
 

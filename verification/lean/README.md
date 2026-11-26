@@ -10,7 +10,7 @@ It is not a direct C-to-Lean proof of C code.
 
 The current formalization covers node-level invariants, search semantics, leaf insertion, node splitting bounds, and preallocation split counting.
 
-1. **Machine-Checked in Lean 4 (40 Theorems, Zero `sorry`)**:
+1. **Machine-Checked in Lean 4 (48 Theorems, Zero `sorry`)**:
    - Capacity and occupancy bounds for `minLeafKeys` and `minInternalKeys`
    - Structural validity (`Valid`) of the empty tree
    - Tree count consistency (`count_eq_toList_length`)
@@ -42,6 +42,7 @@ The current formalization covers node-level invariants, search semantics, leaf i
 | 6 | Empty tree lookup and containment | Verified in Lean 4 | `Bptree.Search` | `lookup_empty`, `contains_empty`, `contains_eq_isSome_lookup` | `bptree_get`, `bptree_contains` |
 | 7 | Internal child index within bounds | Verified in Lean 4 | `Bptree.Search` | `findChildIdx_le_length` | `bptree_node_search` |
 | 8 | Leaf lookup soundness and completeness | Verified in Lean 4 | `Bptree.Search` | `leafLookup_mem`, `leafLookup_of_mem_sorted` | `bptree_get`, `bptree_node_search` |
+| 9 | Range query and iterator bounds | Verified in Lean 4 | `Bptree.Search` | `rangeQuery_empty`, `mem_rangeQuery_iff`, `rangeQuery_gt`, `lowerBound_empty`, `upperBound_empty`, `lowerBound_mem`, `upperBound_mem`, `upperBound_eq_lowerBound_succ` | `bptree_get_range`, `bptree_iter_lower_bound`, `bptree_iter_upper_bound` |
 | 9 | Leaf duplicate-key rejection | Verified in Lean 4 | `Bptree.Insert` | `insertEntries_duplicate` | `bptree_insert_internal`, `bptree_put` |
 | 10 | Leaf insertion length and lookup | Verified in Lean 4 | `Bptree.Insert` | `insertEntries_length`, `leafLookup_insertEntries_self`, `leafLookup_insertEntries_ne` | `bptree_insert_internal` |
 | 11 | Leaf insertion sortedness preservation | Verified in Lean 4 | `Bptree.Insert` | `insertEntries_preserves_sorted` | `bptree_insert_internal`, `bptree_check_invariants_node` |

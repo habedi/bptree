@@ -42,6 +42,16 @@ private def runRemoveStep (maxKeys : Nat) (tree : BPlusTree Nat Nat) (stepIdx k 
     return tree
 
 private def runQueries (tree : BPlusTree Nat Nat) : IO Unit := do
+  let iterItems := (iterList tree).map (fun p => s!"{p.1}:{p.2}")
+  IO.println s!"QUERY ITER -> [{String.intercalate "," iterItems}]"
+  for i in List.range 10 do
+    let k := i * 6
+    match lowerBound tree k with
+    | some (k', v') => IO.println s!"QUERY LB {k} -> {k'}:{v'}"
+    | none => IO.println s!"QUERY LB {k} -> END"
+    match upperBound tree k with
+    | some (k', v') => IO.println s!"QUERY UB {k} -> {k'}:{v'}"
+    | none => IO.println s!"QUERY UB {k} -> END"
   for i in List.range 20 do
     let k := i * 3 + 1
     match lookup tree k with

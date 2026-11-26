@@ -475,6 +475,67 @@ theorem splitInternal_right_sorted {V : Type} {keys : List Nat}
   simp only [splitInternalNodes, KeysSorted]
   exact hsort.sublist (List.drop_sublist _ _)
 
+/-- Splitting a leaf conserves the total number of entries. -/
+theorem splitLeafEntries_length_sum {V : Type} (entries : List (Nat × V)) :
+    let (left, _, right) := splitLeafEntries entries
+    left.length + right.length = entries.length := by
+  simp only [splitLeafEntries, List.length_take, List.length_drop]
+  omega
+
+/-- Splitting an internal node conserves the total number of keys (left + promoted + right). -/
+theorem splitInternal_keys_length_sum {K V : Type} {keys : List K}
+    {children : List (BPlusTree K V)} (defaultK : K) (hne : 1 ≤ keys.length) :
+    let ((lk, _), _, (rk, _)) := splitInternalNodes keys children defaultK
+    lk.length + 1 + rk.length = keys.length := by
+  simp only [splitInternalNodes, List.length_take, List.length_drop]
+  omega
+
+/-- Splitting an internal node conserves all child subtrees in order. -/
+theorem splitInternal_children_append {K V : Type} (keys : List K)
+    (children : List (BPlusTree K V)) (defaultK : K) :
+    let ((_, lc), _, (_, rc)) := splitInternalNodes keys children defaultK
+    lc ++ rc = children := by
+  simp [splitInternalNodes, List.take_append_drop]
+
+/-- Inserting into a leaf tree increases `count` by 1 upon success, even across a root split. -/
+theorem insert_leaf_count {V : Type} {maxKeys : Nat} {entries : List (Nat × V)}
+    {k : Nat} {v : V} {t' : BPlusTree Nat V}
+    (h : insert maxKeys (.leaf entries) k v = .ok t') :
+    t'.count = (BPlusTree.leaf entries).count + 1 := by
+  simp only [insert, insertNode] at h
+  cases hent : insertEntries entries k v with
+  | none => simp [hent] at h
+  | some entries' =>
+    have hlen := insertEntries_length hent
+    simp only [hent] at h
+    split_ifs at h
+    · simp only [Except.ok.injEq] at h
+      subst h
+      have hsum := splitLeafEntries_length_sum entries'
+      simp only [BPlusTree.count, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
+      omega
+    · simp only [Except.ok.injEq] at h
+      subst h
+      simp only [BPlusTree.count]
+      omega
+
+/-- Inserting into a leaf tree produces `t'.toList = entries'` upon success, even across a root split. -/
+theorem insert_leaf_toList {V : Type} {maxKeys : Nat} {entries entries' : List (Nat × V)}
+    {k : Nat} {v : V} {t' : BPlusTree Nat V}
+    (hent : insertEntries entries k v = some entries')
+    (h : insert maxKeys (.leaf entries) k v = .ok t') :
+    t'.toList = entries' := by
+  simp only [insert, insertNode, hent] at h
+  split_ifs at h
+  · simp only [Except.ok.injEq] at h
+    subst h
+    simp only [BPlusTree.toList, BPlusTree.leaves, List.flatMap_cons, List.flatMap_nil,
+      List.append_nil, List.singleton_append, List.flatten_cons, List.flatten_nil]
+    exact splitLeafEntries_append entries'
+  · simp only [Except.ok.injEq] at h
+    subst h
+    simp [BPlusTree.toList, BPlusTree.leaves]
+
 end Bptree
 
 end

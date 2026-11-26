@@ -580,6 +580,53 @@ theorem mergeInternal_preserves_sorted {leftKeys rightKeys : List Nat} {sep : Na
       subst ha_s
       exact hsep_right b hb
 
+/-- Removing from a leaf tree decreases `count` by 1 upon success. -/
+theorem remove_leaf_count {V : Type} {maxKeys : Nat} {entries : List (Nat × V)}
+    {k : Nat} {t' : BPlusTree Nat V}
+    (h : remove maxKeys (.leaf entries) k = .ok t') :
+    t'.count + 1 = (BPlusTree.leaf entries).count := by
+  cases entries with
+  | nil => simp [remove] at h
+  | cons hd tl =>
+    simp only [remove, removeNode] at h
+    cases hrem : removeEntries (hd :: tl) k with
+    | none => simp [hrem] at h
+    | some res =>
+      rcases res with ⟨entries', b⟩
+      have hlen := removeEntries_length hrem
+      simp only [hrem, Except.ok.injEq] at h
+      subst h
+      simp only [BPlusTree.count]
+      omega
+
+/-- Removing from a leaf tree produces `t'.toList = entries'` upon success. -/
+theorem remove_leaf_toList {V : Type} {maxKeys : Nat} {entries entries' : List (Nat × V)}
+    {k : Nat} {b : Bool} {t' : BPlusTree Nat V}
+    (hrem : removeEntries entries k = some (entries', b))
+    (h : remove maxKeys (.leaf entries) k = .ok t') :
+    t'.toList = entries' := by
+  cases entries with
+  | nil => simp [removeEntries] at hrem
+  | cons hd tl =>
+    simp only [remove, removeNode, hrem, Except.ok.injEq] at h
+    subst h
+    simp [BPlusTree.toList, BPlusTree.leaves]
+
+/-- Borrowing from a left leaf sibling conserves the total entry count across both leaves. -/
+theorem borrowLeft_leaf_count_sum {V : Type} {left leftInit right : List (Nat × V)}
+    {lastEntry : Nat × V} (h : splitLast? left = some (leftInit, lastEntry)) :
+    leftInit.length + (lastEntry :: right).length = left.length + right.length := by
+  have hlen := splitLast?_length h
+  simp only [List.length_cons]
+  omega
+
+/-- Borrowing from a right leaf sibling conserves the total entry count across both leaves. -/
+theorem borrowRight_leaf_count_sum {V : Type} (left : List (Nat × V)) (r0 : Nat × V)
+    (rRest : List (Nat × V)) :
+    (left ++ [r0]).length + rRest.length = left.length + (r0 :: rRest).length := by
+  simp only [List.length_append, List.length_cons, List.length_nil]
+  omega
+
 end Bptree
 
 end

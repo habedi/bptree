@@ -113,3 +113,18 @@ example {t t' : BPlusTree Nat Nat} (h : insert 3 t 42 100 = .ok t') :
 example {t t' : BPlusTree Nat Nat} (h : remove 3 t 42 = .ok t') :
     t'.count + 1 = t.count :=
   remove_count h
+
+example {t t' : BPlusTree Nat Nat} (hcc : ChildCountValid t)
+    (h : insert 3 t 42 100 = .ok t') :
+    ChildCountValid t' :=
+  insert_preserves_ChildCountValid hcc h
+
+example {t t' : BPlusTree Nat Nat} (hcc : ChildCountValid t)
+    (hud : UniformDepth t t.height) (h : insert 3 t 42 100 = .ok t') :
+    UniformDepth t' t'.height :=
+  insert_preserves_UniformDepth hcc hud h
+
+example {t t' : BPlusTree Nat Nat} (hro : RootOccupancy 3 t)
+    (h : insert 3 t 42 100 = .ok t') :
+    RootOccupancy 3 t' :=
+  insert_preserves_RootOccupancy (by decide) hro h

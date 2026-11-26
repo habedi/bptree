@@ -691,6 +691,557 @@ theorem insert_count {V : Type} {maxKeys : Nat} {t t' : BPlusTree Nat V}
       simp only [BPlusTree.count, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
       omega
 
+private theorem mem_set_of_mem {α : Type} :
+    {xs : List α} → {pos : Nat} → {x y : α} →
+    y ∈ xs.set pos x → y = x ∨ y ∈ xs
+  | [], _, _, _, hy => by simp at hy
+  | _ :: xs, 0, x, y, hy => by
+    simp only [List.set_cons_zero, List.mem_cons] at hy
+    rcases hy with rfl | hmem
+    · exact Or.inl rfl
+    · exact Or.inr (List.mem_cons_of_mem _ hmem)
+  | hd :: xs, pos + 1, x, y, hy => by
+    simp only [List.set_cons_succ, List.mem_cons] at hy
+    rcases hy with rfl | hmem
+    · exact Or.inr List.mem_cons_self
+    · rcases mem_set_of_mem hmem with rfl | hmem'
+      · exact Or.inl rfl
+      · exact Or.inr (List.mem_cons_of_mem hd hmem')
+
+private theorem length_take_append_drop_cons {α : Type} (xs : List α) (i : Nat) (x : α)
+    (hi : i ≤ xs.length) :
+    (xs.take i ++ [x] ++ xs.drop i).length = xs.length + 1 := by
+  simp only [List.length_append, List.length_take, List.length_drop, List.length_singleton]
+  omega
+
+private theorem mem_take_append_drop_cons {α : Type} {xs : List α} {i : Nat} {x y : α}
+    (hy : y ∈ xs.take i ++ [x] ++ xs.drop i) : y = x ∨ y ∈ xs := by
+  simp only [List.mem_append, List.mem_singleton] at hy
+  rcases hy with (hy_t | rfl) | hy_d
+  · exact Or.inr (List.mem_of_mem_take hy_t)
+  · exact Or.inl rfl
+  · exact Or.inr (List.mem_of_mem_drop hy_d)
+
+/-- Multi-level `ChildCountValid` preservation for `insertNode`. -/
+theorem insertNode_preserves_ChildCountValid {V : Type} (maxKeys : Nat) :
+    (t : BPlusTree Nat V) → {k : Nat} → {v : V} →
+    {t' : BPlusTree Nat V} → {split : Option (Nat × BPlusTree Nat V)} →
+    ChildCountValid t →
+    insertNode maxKeys t k v = some (t', split) →
+    match split with
+    | none => ChildCountValid t'
+    | some (_, right) => ChildCountValid t' ∧ ChildCountValid right
+  | .leaf entries, k, v, t', split, _, h => by
+    simp only [insertNode] at h
+    cases hent : insertEntries entries k v with
+    | none => simp [hent] at h
+    | some entries' =>
+      simp only [hent] at h
+      split_ifs at h
+      · simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, rfl⟩
+        simp [ChildCountValid]
+      · simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, rfl⟩
+        simp [ChildCountValid]
+  | .internal keys children, k, v, t', split, hcc, h => by
+    simp only [ChildCountValid] at hcc ⊢
+    rcases hcc with ⟨hlen, hcc_ch⟩
+    simp only [insertNode] at h
+    split at h
+    · simp at h
+    · rename_i child hc
+      have hmem : child ∈ children := List.mem_of_getElem? hc
+      have hpos_ch : findChildIdx keys k < children.length :=
+        (List.getElem?_eq_some_iff.mp hc).1
+      have hpos_k : findChildIdx keys k ≤ keys.length := findChildIdx_le_length keys k
+      split at h
+      · simp at h
+      · rename_i child' hrec
+        have ih := insertNode_preserves_ChildCountValid maxKeys child (hcc_ch child hmem) hrec
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, rfl⟩
+        simp only [ChildCountValid]
+        refine ⟨by simp [hlen], ?_⟩
+        intro c hc_mem
+        rcases mem_set_of_mem hc_mem with rfl | hc_old
+        · exact ih
+        · exact hcc_ch c hc_old
+      · rename_i child' promotedKey newChild hrec
+        have ih := insertNode_preserves_ChildCountValid maxKeys child (hcc_ch child hmem) hrec
+        dsimp only at ih
+        have hlen_k' :
+            (keys.take (findChildIdx keys k) ++ [promotedKey] ++
+              keys.drop (findChildIdx keys k)).length = keys.length + 1 :=
+          length_take_append_drop_cons keys (findChildIdx keys k) promotedKey hpos_k
+        have hlen_c' :
+            ((children.set (findChildIdx keys k) child').take (findChildIdx keys k + 1) ++
+              [newChild] ++
+              (children.set (findChildIdx keys k) child').drop (findChildIdx keys k + 1)).length =
+              children.length + 1 := by
+          have hset_len : (children.set (findChildIdx keys k) child').length = children.length := by
+            simp
+          rw [length_take_append_drop_cons _ _ _ (by omega), hset_len]
+        have hmem_c' : ∀ c ∈
+            (children.set (findChildIdx keys k) child').take (findChildIdx keys k + 1) ++
+              [newChild] ++
+              (children.set (findChildIdx keys k) child').drop (findChildIdx keys k + 1),
+            ChildCountValid c := by
+          intro c hc_mem
+          rcases mem_take_append_drop_cons hc_mem with rfl | hc_set
+          · exact ih.2
+          · rcases mem_set_of_mem hc_set with rfl | hc_old
+            · exact ih.1
+            · exact hcc_ch c hc_old
+        split_ifs at h with hgt
+        · simp only [Option.some.injEq, Prod.mk.injEq] at h
+          rcases h with ⟨rfl, rfl⟩
+          simp only [ChildCountValid]
+          refine ⟨⟨?_, ?_⟩, ⟨?_, ?_⟩⟩
+          · simp only [splitInternalNodes, List.length_take, hlen_c', hlen_k', hlen]
+            omega
+          · intro c hc_mem
+            exact hmem_c' c (List.mem_of_mem_take hc_mem)
+          · simp only [splitInternalNodes, List.length_drop, hlen_c', hlen_k', hlen]
+            omega
+          · intro c hc_mem
+            exact hmem_c' c (List.mem_of_mem_drop hc_mem)
+        · simp only [Option.some.injEq, Prod.mk.injEq] at h
+          rcases h with ⟨rfl, rfl⟩
+          simp only [ChildCountValid]
+          exact ⟨by omega, hmem_c'⟩
+  termination_by t => sizeOf t
+  decreasing_by
+    all_goals (
+      simp_wf
+      have hsz := List.sizeOf_lt_of_mem hmem
+      omega
+    )
+
+/-- Multi-level `ChildCountValid` preservation for `insert`. -/
+theorem insert_preserves_ChildCountValid {V : Type} {maxKeys : Nat}
+    {t t' : BPlusTree Nat V} {k : Nat} {v : V}
+    (hcc : ChildCountValid t) (h : insert maxKeys t k v = .ok t') :
+    ChildCountValid t' := by
+  simp only [insert] at h
+  cases hins : insertNode maxKeys t k v with
+  | none => simp [hins] at h
+  | some res =>
+    rcases res with ⟨t0, split⟩
+    have hres := insertNode_preserves_ChildCountValid maxKeys t hcc hins
+    cases split with
+    | none =>
+      simp only [hins, Except.ok.injEq] at h
+      subst h
+      exact hres
+    | some pr =>
+      rcases pr with ⟨p, r⟩
+      simp only [hins, Except.ok.injEq] at h
+      subst h
+      simp only [ChildCountValid]
+      refine ⟨by simp, ?_⟩
+      intro c hc
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+      rcases hc with rfl | rfl
+      · exact hres.1
+      · exact hres.2
+
+/-- Multi-level `UniformDepth` preservation for `insertNode`. -/
+theorem insertNode_preserves_UniformDepth {V : Type} (maxKeys : Nat) :
+    (t : BPlusTree Nat V) → {d k : Nat} → {v : V} →
+    {t' : BPlusTree Nat V} → {split : Option (Nat × BPlusTree Nat V)} →
+    ChildCountValid t → UniformDepth t d →
+    insertNode maxKeys t k v = some (t', split) →
+    match split with
+    | none => UniformDepth t' d
+    | some (_, right) => UniformDepth t' d ∧ UniformDepth right d
+  | .leaf entries, d, k, v, t', split, _, hud, h => by
+    cases d with
+    | zero => simp [UniformDepth] at hud
+    | succ d' =>
+      cases d' with
+      | zero =>
+        simp only [insertNode] at h
+        cases hent : insertEntries entries k v with
+        | none => simp [hent] at h
+        | some entries' =>
+          simp only [hent] at h
+          split_ifs at h
+          · simp only [Option.some.injEq, Prod.mk.injEq] at h
+            rcases h with ⟨rfl, rfl⟩
+            simp [UniformDepth]
+          · simp only [Option.some.injEq, Prod.mk.injEq] at h
+            rcases h with ⟨rfl, rfl⟩
+            simp [UniformDepth]
+      | succ _ => simp [UniformDepth] at hud
+  | .internal keys children, d, k, v, t', split, hcc, hud, h => by
+    cases d with
+    | zero => simp [UniformDepth] at hud
+    | succ d' =>
+      simp only [ChildCountValid] at hcc
+      simp only [UniformDepth] at hud ⊢
+      rcases hcc with ⟨hlen, hcc_ch⟩
+      rcases hud with ⟨hne, hud_ch⟩
+      simp only [insertNode] at h
+      split at h
+      · simp at h
+      · rename_i child hc
+        have hmem : child ∈ children := List.mem_of_getElem? hc
+        have hpos_ch : findChildIdx keys k < children.length :=
+          (List.getElem?_eq_some_iff.mp hc).1
+        have hpos_k : findChildIdx keys k ≤ keys.length := findChildIdx_le_length keys k
+        split at h
+        · simp at h
+        · rename_i child' hrec
+          have ih := insertNode_preserves_UniformDepth maxKeys child
+            (hcc_ch child hmem) (hud_ch child hmem) hrec
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          rcases h with ⟨rfl, rfl⟩
+          refine ⟨?_, ?_⟩
+          · intro hempty
+            have hlen_set : (children.set (findChildIdx keys k) child').length = children.length :=
+              by simp
+            rw [hempty, List.length_nil] at hlen_set
+            exact hne (List.length_eq_zero_iff.mp hlen_set.symm)
+          · intro c hc_mem
+            rcases mem_set_of_mem hc_mem with rfl | hc_old
+            · exact ih
+            · exact hud_ch c hc_old
+        · rename_i child' promotedKey newChild hrec
+          have ih := insertNode_preserves_UniformDepth maxKeys child
+            (hcc_ch child hmem) (hud_ch child hmem) hrec
+          dsimp only at ih
+          have hlen_k' :
+              (keys.take (findChildIdx keys k) ++ [promotedKey] ++
+                keys.drop (findChildIdx keys k)).length = keys.length + 1 :=
+            length_take_append_drop_cons keys (findChildIdx keys k) promotedKey hpos_k
+          have hlen_c' :
+              ((children.set (findChildIdx keys k) child').take (findChildIdx keys k + 1) ++
+                [newChild] ++
+                (children.set (findChildIdx keys k) child').drop (findChildIdx keys k + 1)).length =
+                children.length + 1 := by
+            have hset_len : (children.set (findChildIdx keys k) child').length = children.length :=
+              by simp
+            rw [length_take_append_drop_cons _ _ _ (by omega), hset_len]
+          have hmem_c' : ∀ c ∈
+              (children.set (findChildIdx keys k) child').take (findChildIdx keys k + 1) ++
+                [newChild] ++
+                (children.set (findChildIdx keys k) child').drop (findChildIdx keys k + 1),
+              UniformDepth c d' := by
+            intro c hc_mem
+            rcases mem_take_append_drop_cons hc_mem with rfl | hc_set
+            · exact ih.2
+            · rcases mem_set_of_mem hc_set with rfl | hc_old
+              · exact ih.1
+              · exact hud_ch c hc_old
+          split_ifs at h with hgt
+          · simp only [Option.some.injEq, Prod.mk.injEq] at h
+            rcases h with ⟨rfl, rfl⟩
+            refine ⟨⟨?_, ?_⟩, ⟨?_, ?_⟩⟩
+            · intro hempty
+              have hlen_lc :
+                  ((splitInternalNodes
+                    (keys.take (findChildIdx keys k) ++ [promotedKey] ++
+                      keys.drop (findChildIdx keys k))
+                    ((children.set (findChildIdx keys k) child').take (findChildIdx keys k + 1) ++
+                      [newChild] ++
+                      (children.set (findChildIdx keys k) child').drop
+                        (findChildIdx keys k + 1)) 0).1.2).length = 0 := by
+                rw [hempty]; rfl
+              simp only [splitInternalNodes, List.length_take, hlen_c', hlen_k', hlen] at hlen_lc
+              omega
+            · intro c hc_mem
+              exact hmem_c' c (List.mem_of_mem_take hc_mem)
+            · intro hempty
+              have hlen_rc :
+                  ((splitInternalNodes
+                    (keys.take (findChildIdx keys k) ++ [promotedKey] ++
+                      keys.drop (findChildIdx keys k))
+                    ((children.set (findChildIdx keys k) child').take (findChildIdx keys k + 1) ++
+                      [newChild] ++
+                      (children.set (findChildIdx keys k) child').drop
+                        (findChildIdx keys k + 1)) 0).2.2.2).length = 0 := by
+                rw [hempty]; rfl
+              simp only [splitInternalNodes, List.length_drop, hlen_c', hlen_k', hlen] at hlen_rc
+              omega
+            · intro c hc_mem
+              exact hmem_c' c (List.mem_of_mem_drop hc_mem)
+          · simp only [Option.some.injEq, Prod.mk.injEq] at h
+            rcases h with ⟨rfl, rfl⟩
+            refine ⟨?_, hmem_c'⟩
+            intro hempty
+            have hlen_zero :
+                ((children.set (findChildIdx keys k) child').take (findChildIdx keys k + 1) ++
+                  [newChild] ++
+                  (children.set (findChildIdx keys k) child').drop
+                    (findChildIdx keys k + 1)).length = 0 := by
+              simp [hempty]
+            omega
+  termination_by t => sizeOf t
+  decreasing_by
+    all_goals (
+      simp_wf
+      have hsz := List.sizeOf_lt_of_mem hmem
+      omega
+    )
+
+/-- Multi-level `UniformDepth` preservation for `insert`. -/
+theorem insert_preserves_UniformDepth {V : Type} {maxKeys : Nat}
+    {t t' : BPlusTree Nat V} {k : Nat} {v : V}
+    (hcc : ChildCountValid t) (hud : UniformDepth t t.height)
+    (h : insert maxKeys t k v = .ok t') :
+    UniformDepth t' t'.height := by
+  simp only [insert] at h
+  cases hins : insertNode maxKeys t k v with
+  | none => simp [hins] at h
+  | some res =>
+    rcases res with ⟨t0, split⟩
+    have hres := insertNode_preserves_UniformDepth maxKeys t hcc hud hins
+    cases split with
+    | none =>
+      simp only [hins, Except.ok.injEq] at h
+      subst h
+      have hht : t0.height = t.height := uniformDepth_eq_height hres
+      rw [hht]
+      exact hres
+    | some pr =>
+      rcases pr with ⟨p, r⟩
+      simp only [hins, Except.ok.injEq] at h
+      subst h
+      have hud_root : UniformDepth (BPlusTree.internal [p] [t0, r]) (t.height + 1) := by
+        simp only [UniformDepth]
+        refine ⟨by simp, ?_⟩
+        intro c hc
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+        rcases hc with rfl | rfl
+        · exact hres.1
+        · exact hres.2
+      have hht : (BPlusTree.internal [p] [t0, r]).height = t.height + 1 :=
+        uniformDepth_eq_height hud_root
+      rw [hht]
+      exact hud_root
+
+/-- Multi-level `NonRootOccupancy` preservation for `insertNode`. -/
+theorem insertNode_preserves_NonRootOccupancy {V : Type} {maxKeys : Nat}
+    (hcap : 3 ≤ maxKeys) :
+    (t : BPlusTree Nat V) → {k : Nat} → {v : V} →
+    {t' : BPlusTree Nat V} → {split : Option (Nat × BPlusTree Nat V)} →
+    NonRootOccupancy maxKeys t →
+    insertNode maxKeys t k v = some (t', split) →
+    match split with
+    | none => NonRootOccupancy maxKeys t'
+    | some (_, right) => NonRootOccupancy maxKeys t' ∧ NonRootOccupancy maxKeys right
+  | .leaf entries, k, v, t', split, hno, h => by
+    simp only [NonRootOccupancy] at hno
+    rcases hno with ⟨hmin, hmax⟩
+    simp only [insertNode] at h
+    cases hent : insertEntries entries k v with
+    | none => simp [hent] at h
+    | some entries' =>
+      have hlen := insertEntries_length hent
+      simp only [hent] at h
+      split_ifs at h with hgt
+      · simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, rfl⟩
+        have hl := splitLeaf_left_bounds (V := V) hcap (entries := entries') (by omega)
+        have hr := splitLeaf_right_bounds (V := V) hcap (entries := entries') (by omega)
+        dsimp only at hl hr
+        simp only [NonRootOccupancy]
+        exact ⟨hl, hr⟩
+      · simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, rfl⟩
+        simp only [NonRootOccupancy]
+        omega
+  | .internal keys children, k, v, t', split, hno, h => by
+    simp only [NonRootOccupancy] at hno
+    rcases hno with ⟨hmin, hmax, hno_ch⟩
+    simp only [insertNode] at h
+    split at h
+    · simp at h
+    · rename_i child hc
+      have hmem : child ∈ children := List.mem_of_getElem? hc
+      have hpos_k : findChildIdx keys k ≤ keys.length := findChildIdx_le_length keys k
+      split at h
+      · simp at h
+      · rename_i child' hrec
+        have ih := insertNode_preserves_NonRootOccupancy hcap child (hno_ch child hmem) hrec
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, rfl⟩
+        simp only [NonRootOccupancy]
+        refine ⟨hmin, hmax, ?_⟩
+        intro c hc_mem
+        rcases mem_set_of_mem hc_mem with rfl | hc_old
+        · exact ih
+        · exact hno_ch c hc_old
+      · rename_i child' promotedKey newChild hrec
+        have ih := insertNode_preserves_NonRootOccupancy hcap child (hno_ch child hmem) hrec
+        dsimp only at ih
+        have hlen_k' :
+            (keys.take (findChildIdx keys k) ++ [promotedKey] ++
+              keys.drop (findChildIdx keys k)).length = keys.length + 1 :=
+          length_take_append_drop_cons keys (findChildIdx keys k) promotedKey hpos_k
+        have hmem_c' : ∀ c ∈
+            (children.set (findChildIdx keys k) child').take (findChildIdx keys k + 1) ++
+              [newChild] ++
+              (children.set (findChildIdx keys k) child').drop (findChildIdx keys k + 1),
+            NonRootOccupancy maxKeys c := by
+          intro c hc_mem
+          rcases mem_take_append_drop_cons hc_mem with rfl | hc_set
+          · exact ih.2
+          · rcases mem_set_of_mem hc_set with rfl | hc_old
+            · exact ih.1
+            · exact hno_ch c hc_old
+        split_ifs at h with hgt
+        · simp only [Option.some.injEq, Prod.mk.injEq] at h
+          rcases h with ⟨rfl, rfl⟩
+          have hl := splitInternal_left_bounds (V := V) 0 hcap (keys := keys.take (findChildIdx keys k) ++
+            [promotedKey] ++ keys.drop (findChildIdx keys k))
+            (children := (children.set (findChildIdx keys k) child').take
+              (findChildIdx keys k + 1) ++ [newChild] ++
+              (children.set (findChildIdx keys k) child').drop (findChildIdx keys k + 1))
+            (by omega)
+          have hr := splitInternal_right_bounds (V := V) 0 hcap (keys := keys.take (findChildIdx keys k) ++
+            [promotedKey] ++ keys.drop (findChildIdx keys k))
+            (children := (children.set (findChildIdx keys k) child').take
+              (findChildIdx keys k + 1) ++ [newChild] ++
+              (children.set (findChildIdx keys k) child').drop (findChildIdx keys k + 1))
+            (by omega)
+          dsimp only at hl hr
+          simp only [NonRootOccupancy]
+          refine ⟨⟨hl.1, hl.2, ?_⟩, ⟨hr.1, hr.2, ?_⟩⟩
+          · intro c hc_mem
+            exact hmem_c' c (List.mem_of_mem_take hc_mem)
+          · intro c hc_mem
+            exact hmem_c' c (List.mem_of_mem_drop hc_mem)
+        · simp only [Option.some.injEq, Prod.mk.injEq] at h
+          rcases h with ⟨rfl, rfl⟩
+          simp only [NonRootOccupancy]
+          refine ⟨by omega, by omega, hmem_c'⟩
+  termination_by t => sizeOf t
+  decreasing_by
+    all_goals (
+      simp_wf
+      have hsz := List.sizeOf_lt_of_mem hmem
+      omega
+    )
+
+/-- Multi-level `RootOccupancy` preservation for `insert`. -/
+theorem insert_preserves_RootOccupancy {V : Type} {maxKeys : Nat}
+    (hcap : 3 ≤ maxKeys) {t t' : BPlusTree Nat V} {k : Nat} {v : V}
+    (hro : RootOccupancy maxKeys t)
+    (h : insert maxKeys t k v = .ok t') :
+    RootOccupancy maxKeys t' := by
+  cases t with
+  | leaf entries =>
+    simp only [RootOccupancy] at hro
+    simp only [insert, insertNode] at h
+    cases hent : insertEntries entries k v with
+    | none => simp [hent] at h
+    | some entries' =>
+      have hlen := insertEntries_length hent
+      simp only [hent] at h
+      split_ifs at h with hgt
+      · simp only [Except.ok.injEq] at h
+        subst h
+        have hl := splitLeaf_left_bounds (V := V) hcap (entries := entries') (by omega)
+        have hr := splitLeaf_right_bounds (V := V) hcap (entries := entries') (by omega)
+        dsimp only at hl hr
+        simp only [RootOccupancy]
+        refine ⟨by simp, by simp; omega, ?_⟩
+        intro c hc
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+        rcases hc with rfl | rfl
+        · simpa [NonRootOccupancy] using hl
+        · simpa [NonRootOccupancy] using hr
+      · simp only [Except.ok.injEq] at h
+        subst h
+        simp only [RootOccupancy]
+        omega
+  | internal keys children =>
+    simp only [RootOccupancy] at hro
+    rcases hro with ⟨hmin, hmax, hno_ch⟩
+    simp only [insert] at h
+    cases hins : insertNode maxKeys (.internal keys children) k v with
+    | none => simp [hins] at h
+    | some res =>
+      rcases res with ⟨t0, split⟩
+      simp only [hins] at h
+      simp only [insertNode] at hins
+      split at hins
+      · cases hins
+      · rename_i child hc
+        have hmem : child ∈ children := List.mem_of_getElem? hc
+        have hpos_k : findChildIdx keys k ≤ keys.length := findChildIdx_le_length keys k
+        split at hins
+        · cases hins
+        · rename_i child' hrec
+          have hchild' := insertNode_preserves_NonRootOccupancy hcap child (hno_ch child hmem) hrec
+          simp only [Option.some.injEq, Prod.mk.injEq] at hins
+          rcases hins with ⟨rfl, rfl⟩
+          simp only [Except.ok.injEq] at h
+          subst h
+          simp only [RootOccupancy]
+          refine ⟨hmin, hmax, ?_⟩
+          intro c hc_mem
+          rcases mem_set_of_mem hc_mem with rfl | hc_old
+          · exact hchild'
+          · exact hno_ch c hc_old
+        · rename_i child' promotedKey newChild hrec
+          have hchild' := insertNode_preserves_NonRootOccupancy hcap child (hno_ch child hmem) hrec
+          dsimp only at hchild'
+          have hlen_k' :
+              (keys.take (findChildIdx keys k) ++ [promotedKey] ++
+                keys.drop (findChildIdx keys k)).length = keys.length + 1 :=
+            length_take_append_drop_cons keys (findChildIdx keys k) promotedKey hpos_k
+          have hmem_c' : ∀ c ∈
+              (children.set (findChildIdx keys k) child').take (findChildIdx keys k + 1) ++
+                [newChild] ++
+                (children.set (findChildIdx keys k) child').drop (findChildIdx keys k + 1),
+              NonRootOccupancy maxKeys c := by
+            intro c hc_mem
+            rcases mem_take_append_drop_cons hc_mem with rfl | hc_set
+            · exact hchild'.2
+            · rcases mem_set_of_mem hc_set with rfl | hc_old
+              · exact hchild'.1
+              · exact hno_ch c hc_old
+          split_ifs at hins with hgt
+          · simp only [Option.some.injEq, Prod.mk.injEq] at hins
+            rcases hins with ⟨rfl, rfl⟩
+            simp only [Except.ok.injEq] at h
+            subst h
+            have hl := splitInternal_left_bounds (V := V) 0 hcap (keys := keys.take (findChildIdx keys k) ++
+              [promotedKey] ++ keys.drop (findChildIdx keys k))
+              (children := (children.set (findChildIdx keys k) child').take
+                (findChildIdx keys k + 1) ++ [newChild] ++
+                (children.set (findChildIdx keys k) child').drop (findChildIdx keys k + 1))
+              (by omega)
+            have hr := splitInternal_right_bounds (V := V) 0 hcap (keys := keys.take (findChildIdx keys k) ++
+              [promotedKey] ++ keys.drop (findChildIdx keys k))
+              (children := (children.set (findChildIdx keys k) child').take
+                (findChildIdx keys k + 1) ++ [newChild] ++
+                (children.set (findChildIdx keys k) child').drop (findChildIdx keys k + 1))
+              (by omega)
+            dsimp only at hl hr
+            simp only [RootOccupancy]
+            refine ⟨by simp, by simp; omega, ?_⟩
+            intro c hc_root
+            simp only [List.mem_cons, List.not_mem_nil, or_false] at hc_root
+            rcases hc_root with rfl | rfl
+            · simp only [NonRootOccupancy]
+              refine ⟨hl.1, hl.2, ?_⟩
+              intro x hx
+              exact hmem_c' x (List.mem_of_mem_take hx)
+            · simp only [NonRootOccupancy]
+              refine ⟨hr.1, hr.2, ?_⟩
+              intro x hx
+              exact hmem_c' x (List.mem_of_mem_drop hx)
+          · simp only [Option.some.injEq, Prod.mk.injEq] at hins
+            rcases hins with ⟨rfl, rfl⟩
+            simp only [Except.ok.injEq] at h
+            subst h
+            simp only [RootOccupancy]
+            refine ⟨by omega, by omega, hmem_c'⟩
+
 end Bptree
 
 end

@@ -10,7 +10,7 @@ It is not a direct C-to-Lean proof of C code.
 
 The current formalization covers node-level invariants, search semantics, leaf insertion, node splitting bounds, and preallocation split counting.
 
-1. **Machine-Checked in Lean 4 (100 Theorems, Zero `sorry`)**:
+1. **Machine-Checked in Lean 4 (107 Theorems, Zero `sorry`)**:
    - Capacity and occupancy bounds for `minLeafKeys` and `minInternalKeys`
    - Structural validity (`Valid`) of the empty tree
    - Tree count consistency (`count_eq_toList_length`)
@@ -55,9 +55,10 @@ The current formalization covers node-level invariants, search semantics, leaf i
 | 19 | Leaf and internal sibling borrowing bounds and preservation | Verified in Lean 4 | `Bptree.Remove` | `splitLast?_append_eq`, `splitLast?_length`, `borrowLeft_leaf_append`, `borrowRight_leaf_append`, `borrowLeft_leaf_count_sum`, `borrowRight_leaf_count_sum`, `borrowLeft_leaf_bounds`, `borrowRight_leaf_bounds`, `borrowLeft_internal_bounds`, `borrowRight_internal_bounds` | `bptree_rebalance_up` |
 | 20 | Leaf and internal merge overflow freedom, sortedness, and child count | Verified in Lean 4 | `Bptree.Remove` | `mergeLeaf_bounds`, `mergeInternal_bounds`, `mergeInternal_children_length`, `mergeLeaf_preserves_sorted`, `mergeInternal_preserves_sorted` | `bptree_rebalance_up` |
 | 21 | Multi-level search, insert, remove, and range | Modelled and differential-tested | `Bptree.Search`, `Bptree.Insert`, `Bptree.Remove` | `lookup`, `insert`, `remove`, `rangeQuery`, `BPlusTree.serialize`, `checkInvariants` | `bptree_get`, `bptree_put`, `bptree_remove`, `bptree_get_range` |
-| 22 | Full-tree insert and remove invariant proofs | Planned | `Bptree.Insert`, `Bptree.Remove` | `Valid` | `bptree_put`, `bptree_remove`, `bptree_check_invariants` |
-| 23 | Leaf `next`-pointer chain continuity | Runtime-checked in C | `Bptree.Basic` | `leaves` (abstract leaf order) | `bptree_check_invariants` |
-| 24 | Allocation failure atomicity and memory safety | Tested in C (ASan, UBSan) and CBMC (`verification/cbmc/`) | `Bptree.Insert` | `reservedNodesNeeded` | `bptree_put`, `test/extras/test_safety.c` |
+| 22 | Multi-level `insert` structural invariant preservation (`ChildCountValid`, `UniformDepth`, `NonRootOccupancy`, and `RootOccupancy`) | Verified in Lean 4 | `Bptree.Insert` | `insertNode_preserves_ChildCountValid`, `insert_preserves_ChildCountValid`, `insertNode_preserves_UniformDepth`, `insert_preserves_UniformDepth`, `insertNode_preserves_NonRootOccupancy`, `insert_preserves_RootOccupancy` | `bptree_put`, `bptree_check_invariants` |
+| 23 | Full-tree `insert` sortedness and separator preservation, and full-tree `remove` invariant preservation | Planned | `Bptree.Insert`, `Bptree.Remove` | `NodeSorted`, `SeparatorsValid`, `Valid` | `bptree_put`, `bptree_remove`, `bptree_check_invariants` |
+| 24 | Leaf `next`-pointer chain continuity | Runtime-checked in C | `Bptree.Basic` | `leaves` (abstract leaf order) | `bptree_check_invariants` |
+| 25 | Allocation failure atomicity and memory safety | Tested in C (ASan, UBSan) and CBMC (`verification/cbmc/`) | `Bptree.Insert` | `reservedNodesNeeded` | `bptree_put`, `test/extras/test_safety.c` |
 
 ## Project Structure
 

@@ -491,6 +491,64 @@ theorem borrowRight_internal_bounds {maxKeys : Nat} {childKeys rRest : List Nat}
   simp only [List.length_append, List.length_cons, List.length_nil] at hright_lo hright_hi ⊢
   omega
 
+/-- Merging two internal nodes with a pulled-down separator key preserves
+    `children.length = keys.length + 1`. -/
+theorem mergeInternal_children_length {K V : Type} {leftKeys rightKeys : List K}
+    {leftChildren rightChildren : List (BPlusTree K V)} (sep : K)
+    (hl : leftChildren.length = leftKeys.length + 1)
+    (hr : rightChildren.length = rightKeys.length + 1) :
+    (leftChildren ++ rightChildren).length = (leftKeys ++ [sep] ++ rightKeys).length + 1 := by
+  simp only [List.length_append, List.length_cons, List.length_nil, hl, hr]
+  omega
+
+/-- Full-tree missing-key rejection for `removeNode`: if `lookup t k = none`,
+    `removeNode` returns `none`. -/
+theorem removeNode_not_found_of_lookup {V : Type} (maxKeys : Nat) :
+    (t : BPlusTree Nat V) → {k : Nat} →
+    lookup t k = none → removeNode maxKeys t k = none
+  | .leaf entries, k, hlook => by
+    simp only [lookup] at hlook
+    simp only [removeNode, removeEntries_not_found hlook]
+  | .internal keys children, k, hlook => by
+    simp only [lookup] at hlook
+    simp only [removeNode]
+    split at hlook
+    · rename_i child hc
+      split
+      · rfl
+      · rename_i child' hc'
+        rw [hc] at hc'
+        injection hc' with hceq
+        have hmem : child ∈ children := List.mem_of_getElem? hc
+        have ih := removeNode_not_found_of_lookup maxKeys child hlook
+        rw [← hceq]
+        simp [ih]
+    · rename_i hnone
+      split
+      · rfl
+      · rename_i child' hc'
+        rw [hnone] at hc'
+        simp at hc'
+  termination_by t => sizeOf t
+  decreasing_by
+    simp_wf
+    have hsz := List.sizeOf_lt_of_mem hmem
+    omega
+
+/-- Full-tree missing-key rejection for `remove`: if `lookup t k = none`,
+    `remove` returns `Status.keyNotFound`. -/
+theorem remove_not_found_of_lookup {V : Type} (maxKeys : Nat) {t : BPlusTree Nat V}
+    {k : Nat} (hlook : lookup t k = none) :
+    remove maxKeys t k = .error .keyNotFound := by
+  cases t with
+  | leaf entries =>
+    cases entries with
+    | nil => simp [remove]
+    | cons hd tl =>
+      simp only [remove, removeNode_not_found_of_lookup maxKeys _ hlook]
+  | internal keys children =>
+    simp only [remove, removeNode_not_found_of_lookup maxKeys _ hlook]
+
 end Bptree
 
 end

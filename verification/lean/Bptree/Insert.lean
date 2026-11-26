@@ -367,6 +367,68 @@ theorem reservedNodesNeeded_le_height_succ {V : Type} {maxKeys : Nat} (t : BPlus
   dsimp only
   split_ifs <;> omega
 
+/-- The left half of a leaf split preserves `EntriesSorted`. -/
+theorem splitLeafEntries_left_sorted {V : Type} {entries : List (Nat × V)}
+    (hsort : EntriesSorted entries) :
+    EntriesSorted (splitLeafEntries entries).1 := by
+  simp only [splitLeafEntries, EntriesSorted]
+  exact hsort.sublist ((List.take_sublist _ _).map Prod.fst)
+
+/-- The right half of a leaf split preserves `EntriesSorted`. -/
+theorem splitLeafEntries_right_sorted {V : Type} {entries : List (Nat × V)}
+    (hsort : EntriesSorted entries) :
+    EntriesSorted (splitLeafEntries entries).2.2 := by
+  simp only [splitLeafEntries, EntriesSorted]
+  exact hsort.sublist ((List.drop_sublist _ _).map Prod.fst)
+
+/-- Splitting an internal node preserves `children.length = keys.length + 1` for both halves. -/
+theorem splitInternal_children_lengths {K V : Type} {maxKeys : Nat} {keys : List K}
+    {children : List (BPlusTree K V)} (defaultK : K)
+    (hcap : 3 ≤ maxKeys) (hlen : keys.length = maxKeys + 1)
+    (hch : children.length = keys.length + 1) :
+    let ((lk, lc), _, (rk, rc)) := splitInternalNodes keys children defaultK
+    lc.length = lk.length + 1 ∧ rc.length = rk.length + 1 := by
+  simp only [splitInternalNodes, List.length_take, List.length_drop, hch, hlen]
+  omega
+
+/-- Full-tree duplicate rejection for `insertNode`: if `lookup t k = some v₀` in a sorted tree,
+    `insertNode` returns `none`. -/
+theorem insertNode_duplicate_of_lookup {V : Type} (maxKeys : Nat) :
+    (t : BPlusTree Nat V) → {k : Nat} → {v v₀ : V} →
+    NodeSorted t → lookup t k = some v₀ → insertNode maxKeys t k v = none
+  | .leaf entries, k, v, _, hsort, hlook => by
+    simp only [NodeSorted] at hsort
+    simp only [lookup] at hlook
+    simp only [insertNode, insertEntries_duplicate hsort hlook]
+  | .internal keys children, k, v, v₀, hsort, hlook => by
+    simp only [NodeSorted] at hsort
+    simp only [lookup] at hlook
+    simp only [insertNode]
+    split at hlook
+    · rename_i child hc
+      split
+      · rfl
+      · rename_i child' hc'
+        rw [hc] at hc'
+        injection hc' with hceq
+        have hmem : child ∈ children := List.mem_of_getElem? hc
+        have ih := insertNode_duplicate_of_lookup maxKeys child (v := v) (hsort.2 child hmem) hlook
+        rw [← hceq]
+        simp [ih]
+    · simp at hlook
+  termination_by t => sizeOf t
+  decreasing_by
+    simp_wf
+    have hsz := List.sizeOf_lt_of_mem hmem
+    omega
+
+/-- Full-tree duplicate rejection for `insert`: if `lookup t k = some v₀` in a sorted tree,
+    `insert` returns `Status.duplicateKey`. -/
+theorem insert_duplicate_of_lookup {V : Type} (maxKeys : Nat) {t : BPlusTree Nat V}
+    {k : Nat} {v v₀ : V} (hsort : NodeSorted t) (hlook : lookup t k = some v₀) :
+    insert maxKeys t k v = .error .duplicateKey := by
+  simp [insert, insertNode_duplicate_of_lookup maxKeys t hsort hlook]
+
 end Bptree
 
 end

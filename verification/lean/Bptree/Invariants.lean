@@ -331,6 +331,44 @@ theorem checkInvariants_empty {maxKeys : Nat} (V : Type) (h : checkCapacity maxK
   simp [checkInvariants, h, empty, checkNodeSorted, checkKeysSorted, checkChildCount,
     checkRootOccupancy, BPlusTree.height, checkUniformDepth, checkSeparators]
 
+/-- Soundness of `checkKeysSorted` with respect to `KeysSorted`. -/
+theorem checkKeysSorted_sound :
+    {keys : List Nat} → checkKeysSorted keys = true → KeysSorted keys
+  | [], _ => by simp [KeysSorted]
+  | [_], _ => by simp [KeysSorted]
+  | k1 :: k2 :: ks, h => by
+    simp only [checkKeysSorted, Bool.and_eq_true, decide_eq_true_eq] at h
+    have htl : KeysSorted (k2 :: ks) := checkKeysSorted_sound h.2
+    simp only [KeysSorted, List.pairwise_cons] at htl ⊢
+    refine ⟨?_, htl⟩
+    intro x hx
+    rcases List.mem_cons.mp hx with rfl | hx_ks
+    · exact h.1
+    · exact Nat.lt_trans h.1 (htl.1 x hx_ks)
+
+/-- Soundness of `checkNodeSorted` with respect to `NodeSorted`. -/
+theorem checkNodeSorted_sound {V : Type} :
+    (t : BPlusTree Nat V) → checkNodeSorted t = true → NodeSorted t
+  | .leaf entries, h => by
+    simp only [checkNodeSorted] at h
+    simpa [NodeSorted, EntriesSorted, KeysSorted] using checkKeysSorted_sound h
+  | .internal keys children, h => by
+    simp only [checkNodeSorted, Bool.and_eq_true] at h
+    rcases h with ⟨hkeys, hlist⟩
+    simp only [NodeSorted]
+    refine ⟨checkKeysSorted_sound hkeys, ?_⟩
+    have hmem : ∀ c ∈ children, checkNodeSorted c = true → NodeSorted c :=
+      fun c _ hc => checkNodeSorted_sound c hc
+    clear checkNodeSorted_sound hkeys
+    induction children with
+    | nil => simp
+    | cons c cs ih =>
+      simp only [checkNodeSortedList, Bool.and_eq_true] at hlist
+      intro x hx
+      rcases List.mem_cons.mp hx with rfl | hx_cs
+      · exact hmem x (by simp) hlist.1
+      · exact ih hlist.2 (fun y hy hyb => hmem y (by simp [hy]) hyb) x hx_cs
+
 end Bptree
 
 end

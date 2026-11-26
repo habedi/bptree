@@ -10,7 +10,7 @@ It is not a direct C-to-Lean proof of C code.
 
 The current formalization covers node-level invariants, search semantics, leaf insertion, node splitting bounds, and preallocation split counting.
 
-1. **Machine-Checked in Lean 4 (107 Theorems, Zero `sorry`)**:
+1. **Machine-Checked in Lean 4 (113 Theorems, Zero `sorry`)**:
    - Capacity and occupancy bounds for `minLeafKeys` and `minInternalKeys`
    - Structural validity (`Valid`) of the empty tree
    - Tree count consistency (`count_eq_toList_length`)
@@ -41,7 +41,7 @@ The current formalization covers node-level invariants, search semantics, leaf i
 | 5 | Master executable invariant checker soundness | Verified in Lean 4 | `Bptree.Invariants` | `checkInvariants_sound`, `checkCapacity_iff`, `checkKeysSorted_sound`, `checkNodeSorted_sound`, `checkChildCount_sound`, `checkNonRootOccupancy_sound`, `checkRootOccupancy_sound`, `checkUniformDepth_sound`, `checkAdjacentSeps_sound`, `checkSeparators_sound`, `checkInvariants_empty` | `bptree_check_invariants` |
 | 6 | Empty tree lookup and containment | Verified in Lean 4 | `Bptree.Search` | `lookup_empty`, `contains_empty`, `contains_eq_isSome_lookup` | `bptree_get`, `bptree_contains` |
 | 7 | Internal child index within bounds | Verified in Lean 4 | `Bptree.Search` | `findChildIdx_le_length` | `bptree_node_search` |
-| 8 | Leaf and multi-level lookup soundness and completeness | Verified in Lean 4 | `Bptree.Search` | `leafLookup_mem`, `leafLookup_of_mem_sorted`, `lookup_mem_toList`, `contains_true_exists_mem_toList` | `bptree_get`, `bptree_contains`, `bptree_node_search` |
+| 8 | Leaf and multi-level lookup soundness and completeness | Verified in Lean 4 | `Bptree.Search`, `Bptree.Invariants` | `leafLookup_mem`, `leafLookup_of_mem_sorted`, `lookup_mem_toList`, `contains_true_exists_mem_toList`, `findChildIdx_gt_of_le`, `findChildIdx_le_of_lt`, `findChildIdx_eq_of_bounds`, `lookup_of_mem_toList`, `lookup_eq_some_iff_mem_toList`, `contains_eq_true_iff_exists_mem_toList`, `SubtreesOrdered`, `subtreesOrdered_empty` | `bptree_get`, `bptree_contains`, `bptree_node_search` |
 | 9 | Range query and iterator bounds and find | Verified in Lean 4 | `Bptree.Search` | `rangeQuery_empty`, `mem_rangeQuery_iff`, `rangeQuery_gt`, `lowerBound_empty`, `upperBound_empty`, `lowerBound_mem`, `upperBound_mem`, `upperBound_eq_lowerBound_succ`, `iterFind_empty`, `iterFind_eq_some_iff` | `bptree_get_range`, `bptree_iter_lower_bound`, `bptree_iter_upper_bound`, `bptree_iter_find` |
 | 10 | Multi-level duplicate-key rejection | Verified in Lean 4 | `Bptree.Insert` | `insertEntries_duplicate`, `insertNode_duplicate_of_lookup`, `insert_duplicate_of_lookup` | `bptree_insert_internal`, `bptree_put` |
 | 11 | Multi-level, leaf, and root-split insertion count, height, `toList`, and lookup | Verified in Lean 4 | `Bptree.Insert` | `insertEntries_length`, `leafLookup_insertEntries_self`, `leafLookup_insertEntries_ne`, `insert_leaf_count`, `insert_leaf_toList`, `insertNode_leaf_non_split_height`, `insert_split_root_height`, `insert_split_root_count`, `insertNode_count`, `insert_count` | `bptree_insert_internal`, `bptree_put` |

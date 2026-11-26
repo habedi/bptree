@@ -428,6 +428,21 @@ theorem checkInvariants_sound {V : Type} {maxKeys : Nat} {t : BPlusTree Nat V}
     checkRootOccupancy_sound t hocc, checkUniformDepth_sound t t.height hdepth,
     checkSeparators_sound t hsep⟩
 
+/-- Every child subtree in an internal node contains only keys strictly bounded by the parent's
+    separator keys: all keys in `children[i]` are `< keys[j]` for `i ≤ j` and `≥ keys[j]` for
+    `j < i`. -/
+def SubtreesOrdered {V : Type} : BPlusTree Nat V → Prop
+  | .leaf _ => True
+  | .internal keys children =>
+    (∀ c ∈ children, SubtreesOrdered c) ∧
+    (∀ (i j : Nat) (hi : i < children.length) (hj : j < keys.length) (p : Nat × V),
+      p ∈ children[i].toList →
+      (i ≤ j → p.1 < keys[j]) ∧ (j < i → keys[j] ≤ p.1))
+
+/-- An empty tree satisfies `SubtreesOrdered`. -/
+theorem subtreesOrdered_empty (V : Type) : SubtreesOrdered (empty Nat V) := by
+  simp [empty, SubtreesOrdered]
+
 end Bptree
 
 end

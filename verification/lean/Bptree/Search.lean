@@ -223,6 +223,124 @@ theorem contains_true_exists_mem_toList {V : Type} {t : BPlusTree Nat V} {k : Na
   rcases h with ⟨v, hv⟩
   exact ⟨v, lookup_mem_toList t hv⟩
 
+/-- If `keys` is sorted and `keys[j] ≤ k`, then `findChildIdx keys k` advances past `j`. -/
+theorem findChildIdx_gt_of_le :
+    (keys : List Nat) → {k j : Nat} → (hj : j < keys.length) →
+    KeysSorted keys → keys[j] ≤ k → j < findChildIdx keys k
+  | [], _, _, hj, _, _ => by simp at hj
+  | x :: xs, k, 0, _, _, hle => by
+    simp only [List.getElem_cons_zero] at hle
+    simp only [findChildIdx, List.takeWhile_cons, decide_eq_true hle, ↓reduceIte,
+      List.length_cons]
+    omega
+  | x :: xs, k, j + 1, hj, hsort, hle => by
+    simp only [KeysSorted, List.pairwise_cons] at hsort
+    simp only [List.length_cons] at hj
+    simp only [List.getElem_cons_succ] at hle
+    have hx_mem : xs[j] ∈ xs := List.getElem_mem (by omega)
+    have hx_lt : x < xs[j] := hsort.1 xs[j] hx_mem
+    have hx_le : x ≤ k := by omega
+    have ih := findChildIdx_gt_of_le xs (k := k) (j := j) (by omega) hsort.2 hle
+    simp only [findChildIdx, List.takeWhile_cons, decide_eq_true hx_le, ↓reduceIte,
+      List.length_cons] at ih ⊢
+    omega
+
+/-- If `k < keys[j]`, then `findChildIdx keys k ≤ j`. -/
+theorem findChildIdx_le_of_lt :
+    (keys : List Nat) → {k j : Nat} → (hj : j < keys.length) →
+    k < keys[j] → findChildIdx keys k ≤ j
+  | [], _, _, hj, _ => by simp at hj
+  | x :: xs, k, 0, _, hlt => by
+    simp only [List.getElem_cons_zero] at hlt
+    have hnle : ¬(decide (x ≤ k) = true) := by simp; omega
+    simp only [findChildIdx, List.takeWhile_cons, hnle, Bool.false_eq_true, ↓reduceIte,
+      List.length_nil]
+    omega
+  | x :: xs, k, j + 1, hj, hlt => by
+    simp only [List.length_cons] at hj
+    simp only [List.getElem_cons_succ] at hlt
+    have ih := findChildIdx_le_of_lt xs (k := k) (j := j) (by omega) hlt
+    simp only [findChildIdx, List.takeWhile_cons] at ih ⊢
+    split_ifs
+    · simp only [List.length_cons]; omega
+    · simp
+
+/-- If `k` satisfies the separator bounds of child `i`, then `findChildIdx keys k = i`. -/
+theorem findChildIdx_eq_of_bounds {keys : List Nat} {k i : Nat}
+    (hi_le : i ≤ keys.length) (hsort : KeysSorted keys)
+    (hlt : ∀ (j : Nat) (hj : j < keys.length), i ≤ j → k < keys[j])
+    (hle : ∀ (j : Nat) (hj : j < keys.length), j < i → keys[j] ≤ k) :
+    findChildIdx keys k = i := by
+  have hupper : findChildIdx keys k ≤ i := by
+    by_cases hi_lt : i < keys.length
+    · exact findChildIdx_le_of_lt keys hi_lt (hlt i hi_lt (Nat.le_refl i))
+    · have hlen := findChildIdx_le_length keys k
+      omega
+  by_cases hlt_idx : findChildIdx keys k < i
+  · have hgt := findChildIdx_gt_of_le keys (j := findChildIdx keys k) (by omega) hsort
+      (hle (findChildIdx keys k) (by omega) hlt_idx)
+    omega
+  · omega
+
+private theorem mem_children_of_mem_internal_toList {K V : Type} {keys : List K}
+    {children : List (BPlusTree K V)} {p : K × V}
+    (hp : p ∈ (BPlusTree.internal keys children).toList) :
+    ∃ (i : Nat) (hi : i < children.length), p ∈ children[i].toList := by
+  simp only [BPlusTree.toList, BPlusTree.leaves, List.mem_flatten, List.mem_flatMap] at hp
+  rcases hp with ⟨l, ⟨c, hc_mem, hl_leaves⟩, hp_l⟩
+  rcases List.mem_iff_getElem.mp hc_mem with ⟨i, hi, rfl⟩
+  refine ⟨i, hi, ?_⟩
+  simp only [BPlusTree.toList, List.mem_flatten]
+  exact ⟨l, hl_leaves, hp_l⟩
+
+/-- Full-tree search completeness: in an ordered, sorted, child-count-valid tree,
+    every `(k, v) ∈ t.toList` is found by `lookup t k`. -/
+theorem lookup_of_mem_toList {V : Type} :
+    (t : BPlusTree Nat V) → {k : Nat} → {v : V} →
+    NodeSorted t → ChildCountValid t → SubtreesOrdered t →
+    (k, v) ∈ t.toList → lookup t k = some v
+  | .leaf entries, k, v, hsort, _, _, hmem => by
+    simp only [NodeSorted] at hsort
+    simp only [BPlusTree.toList, BPlusTree.leaves, List.flatten_cons, List.flatten_nil,
+      List.append_nil] at hmem
+    simp only [lookup]
+    exact leafLookup_of_mem_sorted hsort hmem
+  | .internal keys children, k, v, hsort, hcc, hord, hmem => by
+    simp only [NodeSorted] at hsort
+    simp only [ChildCountValid] at hcc
+    simp only [SubtreesOrdered] at hord
+    rcases mem_children_of_mem_internal_toList hmem with ⟨i, hi, hmem_i⟩
+    have hidx : findChildIdx keys k = i :=
+      findChildIdx_eq_of_bounds (by omega) hsort.1
+        (fun j hj hij => (hord.2 i j hi hj (k, v) hmem_i).1 hij)
+        (fun j hj hji => (hord.2 i j hi hj (k, v) hmem_i).2 hji)
+    have hc_mem : children[i] ∈ children := List.getElem_mem hi
+    have ih := lookup_of_mem_toList children[i] (hsort.2 children[i] hc_mem)
+      (hcc.2 children[i] hc_mem) (hord.1 children[i] hc_mem) hmem_i
+    simp only [lookup]
+    rw [hidx, List.getElem?_eq_getElem hi]
+    exact ih
+  termination_by t => sizeOf t
+  decreasing_by
+    simp_wf
+    have hsz := List.sizeOf_lt_of_mem hc_mem
+    omega
+
+/-- Complete `lookup` ↔ `toList` equivalence for valid trees. -/
+theorem lookup_eq_some_iff_mem_toList {V : Type} {t : BPlusTree Nat V} {k : Nat} {v : V}
+    (hsort : NodeSorted t) (hcc : ChildCountValid t) (hord : SubtreesOrdered t) :
+    lookup t k = some v ↔ (k, v) ∈ t.toList :=
+  ⟨lookup_mem_toList t, lookup_of_mem_toList t hsort hcc hord⟩
+
+/-- Complete `contains` ↔ `toList` equivalence for valid trees. -/
+theorem contains_eq_true_iff_exists_mem_toList {V : Type} {t : BPlusTree Nat V} {k : Nat}
+    (hsort : NodeSorted t) (hcc : ChildCountValid t) (hord : SubtreesOrdered t) :
+    contains t k = true ↔ ∃ v, (k, v) ∈ t.toList := by
+  constructor
+  · exact contains_true_exists_mem_toList
+  · rintro ⟨v, hv⟩
+    simp only [contains, lookup_of_mem_toList t hsort hcc hord hv, Option.isSome_some]
+
 end Bptree
 
 end

@@ -128,3 +128,13 @@ example {t t' : BPlusTree Nat Nat} (hro : RootOccupancy 3 t)
     (h : insert 3 t 42 100 = .ok t') :
     RootOccupancy 3 t' :=
   insert_preserves_RootOccupancy (by decide) hro h
+
+example {t : BPlusTree Nat Nat} (hsort : NodeSorted t) (hcc : ChildCountValid t)
+    (hord : SubtreesOrdered t) (k v : Nat) :
+    lookup t k = some v ↔ (k, v) ∈ t.toList :=
+  lookup_eq_some_iff_mem_toList hsort hcc hord
+
+example {t : BPlusTree Nat Nat} (hsort : NodeSorted t) (hcc : ChildCountValid t)
+    (hord : SubtreesOrdered t) (k : Nat) :
+    contains t k = true ↔ ∃ v, (k, v) ∈ t.toList :=
+  contains_eq_true_iff_exists_mem_toList hsort hcc hord

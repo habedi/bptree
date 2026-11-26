@@ -210,7 +210,7 @@ def remove {V : Type} (maxKeys : Nat) (t : BPlusTree Nat V) (k : Nat) :
   | _ =>
     match removeNode maxKeys t k with
     | none => .error .keyNotFound
-    | some (.internal [] (c :: _), _, _) => .ok c
+    | some (.internal [] [c], _, _) => .ok c
     | some (t', _, _) => .ok t'
 
 /-- Removing any key from an empty tree returns `Status.keyNotFound`. -/
@@ -626,6 +626,503 @@ theorem borrowRight_leaf_count_sum {V : Type} (left : List (Nat × V)) (r0 : Nat
     (left ++ [r0]).length + rRest.length = left.length + (r0 :: rRest).length := by
   simp only [List.length_append, List.length_cons, List.length_nil]
   omega
+
+private theorem getElem?_set_ne {α : Type} :
+    (xs : List α) → {i j : Nat} → (x : α) → i ≠ j →
+    (xs.set j x)[i]? = xs[i]?
+  | [], _, _, _, _ => by simp
+  | _ :: _, 0, 0, _, hne => by contradiction
+  | _ :: _, 0, _ + 1, _, _ => by simp
+  | _ :: _, _ + 1, 0, _, _ => by simp
+  | _ :: xs, i + 1, j + 1, x, hne => by
+    simp only [List.set_cons_succ, List.getElem?_cons_succ]
+    exact getElem?_set_ne xs x (by omega)
+
+private theorem list_map_count_set {K V : Type} :
+    (xs : List (BPlusTree K V)) → {pos : Nat} → {c c' : BPlusTree K V} →
+    xs[pos]? = some c →
+    ((xs.set pos c').map BPlusTree.count).sum + c.count =
+      (xs.map BPlusTree.count).sum + c'.count
+  | [], _, _, _, h => by simp at h
+  | _ :: xs, 0, c, c', h => by
+    simp only [List.getElem?_cons_zero, Option.some.injEq] at h
+    subst h
+    simp only [List.set_cons_zero, List.map_cons, List.sum_cons]
+    omega
+  | _ :: xs, pos + 1, c, c', h => by
+    simp only [List.getElem?_cons_succ] at h
+    have ih := list_map_count_set xs h (c' := c')
+    simp only [List.set_cons_succ, List.map_cons, List.sum_cons]
+    omega
+
+private theorem list_map_count_eraseListIdx {K V : Type} :
+    (xs : List (BPlusTree K V)) → {pos : Nat} → {c : BPlusTree K V} →
+    xs[pos]? = some c →
+    ((eraseListIdx xs pos).map BPlusTree.count).sum + c.count =
+      (xs.map BPlusTree.count).sum
+  | [], _, _, h => by simp at h
+  | _ :: xs, 0, c, h => by
+    simp only [List.getElem?_cons_zero, Option.some.injEq] at h
+    subst h
+    simp only [eraseListIdx, List.take_zero, List.drop_succ_cons, List.drop_zero, List.nil_append,
+      List.map_cons, List.sum_cons]
+    omega
+  | x :: xs, pos + 1, c, h => by
+    simp only [List.getElem?_cons_succ] at h
+    have ih := list_map_count_eraseListIdx xs h
+    simp only [eraseListIdx, List.take_succ_cons, List.drop_succ_cons, List.cons_append,
+      List.map_cons, List.sum_cons] at ih ⊢
+    omega
+
+private theorem splitLast?_map_count_sum {K V : Type} {xs init : List (BPlusTree K V)}
+    {last : BPlusTree K V} (h : splitLast? xs = some (init, last)) :
+    (init.map BPlusTree.count).sum + last.count = (xs.map BPlusTree.count).sum := by
+  have happ := splitLast?_append_eq h
+  rw [← happ, List.map_append, List.sum_append]
+  simp
+
+/-- `rebalanceChild` conserves the total entry count across all children. -/
+theorem rebalanceChild_count {V : Type} (maxKeys : Nat) (parentKeys : List Nat)
+    (children : List (BPlusTree Nat V)) (childIdx : Nat) :
+    ((rebalanceChild maxKeys parentKeys children childIdx).2.map BPlusTree.count).sum =
+      (children.map BPlusTree.count).sum := by
+  unfold rebalanceChild
+  split
+  · rfl
+  · rename_i child hchild
+    by_cases hge : child.numKeys ≥ (if child.isLeaf then minLeafKeys maxKeys else minInternalKeys maxKeys)
+    · simp [hge]
+    · simp only [hge, ↓reduceIte]
+      have hborrowLeft :
+          ∀ res, (if childIdx > 0 then
+            match children[childIdx - 1]? with
+            | some leftSib =>
+              let leftMin := if leftSib.isLeaf then minLeafKeys maxKeys else minInternalKeys maxKeys
+              if leftSib.numKeys > leftMin then
+                match leftSib, child with
+                | .leaf leftEntries, .leaf childEntries =>
+                  match splitLast? leftEntries with
+                  | some (leftInit, lastEntry) =>
+                    let leftSib' := BPlusTree.leaf leftInit
+                    let child' := BPlusTree.leaf (lastEntry :: childEntries)
+                    let parentKeys' := parentKeys.set (childIdx - 1) lastEntry.1
+                    let children' := (children.set (childIdx - 1) leftSib').set childIdx child'
+                    some (parentKeys', children')
+                  | none => none
+                | .internal leftKeys leftChildren, .internal childKeys childChildren =>
+                  match splitLast? leftKeys, splitLast? leftChildren, parentKeys[childIdx - 1]? with
+                  | some (lkInit, lastKey), some (lcInit, lastChild), some sep =>
+                    let leftSib' := BPlusTree.internal lkInit lcInit
+                    let child' := BPlusTree.internal (sep :: childKeys) (lastChild :: childChildren)
+                    let parentKeys' := parentKeys.set (childIdx - 1) lastKey
+                    let children' := (children.set (childIdx - 1) leftSib').set childIdx child'
+                    some (parentKeys', children')
+                  | _, _, _ => none
+                | _, _ => none
+              else none
+            | none => none
+          else none) = some res →
+          (res.2.map BPlusTree.count).sum = (children.map BPlusTree.count).sum := by
+        intro res hbl
+        split_ifs at hbl with hgt
+        · cases hleft : children[childIdx - 1]? with
+          | none => simp [hleft] at hbl
+          | some leftSib =>
+            simp only [hleft] at hbl
+            by_cases hgt2 : leftSib.numKeys >
+                (if leftSib.isLeaf then minLeafKeys maxKeys else minInternalKeys maxKeys)
+            · simp only [hgt2, ↓reduceIte] at hbl
+              cases leftSib with
+              | leaf leftEntries =>
+                cases child with
+                | leaf childEntries =>
+                  cases hsp : splitLast? leftEntries with
+                  | none => simp [hsp] at hbl
+                  | some pr =>
+                    rcases pr with ⟨leftInit, lastEntry⟩
+                    simp only [hsp, Option.some.injEq] at hbl
+                    subst hbl
+                    have hlen := splitLast?_length hsp
+                    have hget : (children.set (childIdx - 1) (BPlusTree.leaf leftInit))[childIdx]? =
+                        some (BPlusTree.leaf childEntries) := by
+                      rw [getElem?_set_ne children _ (by omega)]
+                      exact hchild
+                    have hset1 := list_map_count_set children hleft
+                      (c' := BPlusTree.leaf leftInit)
+                    have hset2 := list_map_count_set
+                      (children.set (childIdx - 1) (BPlusTree.leaf leftInit)) hget
+                      (c' := BPlusTree.leaf (lastEntry :: childEntries))
+                    simp only [BPlusTree.count, List.length_cons] at hset1 hset2 ⊢
+                    omega
+                | internal _ _ => simp at hbl
+              | internal leftKeys leftChildren =>
+                cases child with
+                | leaf _ => simp at hbl
+                | internal childKeys childChildren =>
+                  cases hspk : splitLast? leftKeys with
+                  | none => simp [hspk] at hbl
+                  | some pk =>
+                    cases hspc : splitLast? leftChildren with
+                    | none => simp [hspk, hspc] at hbl
+                    | some pc =>
+                      rcases pc with ⟨lcInit, lastChild⟩
+                      cases hsep : parentKeys[childIdx - 1]? with
+                      | none => simp [hspk, hspc, hsep] at hbl
+                      | some sep =>
+                        simp only [hspk, hspc, hsep, Option.some.injEq] at hbl
+                        subst hbl
+                        have hsumc := splitLast?_map_count_sum hspc
+                        have hget :
+                            (children.set (childIdx - 1)
+                              (BPlusTree.internal pk.1 lcInit))[childIdx]? =
+                            some (BPlusTree.internal childKeys childChildren) := by
+                          rw [getElem?_set_ne children _ (by omega)]
+                          exact hchild
+                        have hset1 := list_map_count_set children hleft
+                          (c' := BPlusTree.internal pk.1 lcInit)
+                        have hset2 := list_map_count_set
+                          (children.set (childIdx - 1) (BPlusTree.internal pk.1 lcInit)) hget
+                          (c' := BPlusTree.internal (sep :: childKeys) (lastChild :: childChildren))
+                        simp only [BPlusTree.count, List.map_cons, List.sum_cons] at hset1 hset2 ⊢
+                        omega
+            · simp [hgt2] at hbl
+      have hborrowRight :
+          ∀ res, (if childIdx < parentKeys.length then
+            match children[childIdx + 1]? with
+            | some rightSib =>
+              let rightMin :=
+                if rightSib.isLeaf then minLeafKeys maxKeys else minInternalKeys maxKeys
+              if rightSib.numKeys > rightMin then
+                match child, rightSib with
+                | .leaf childEntries, .leaf (r0 :: r1 :: rs) =>
+                  let child' := BPlusTree.leaf (childEntries ++ [r0])
+                  let rightSib' := BPlusTree.leaf (r1 :: rs)
+                  let parentKeys' := parentKeys.set childIdx r1.1
+                  let children' := (children.set childIdx child').set (childIdx + 1) rightSib'
+                  some (parentKeys', children')
+                | .internal childKeys childChildren, .internal (rk0 :: rks) (rc0 :: rcs) =>
+                  match parentKeys[childIdx]? with
+                  | some sep =>
+                    let child' := BPlusTree.internal (childKeys ++ [sep]) (childChildren ++ [rc0])
+                    let rightSib' := BPlusTree.internal rks rcs
+                    let parentKeys' := parentKeys.set childIdx rk0
+                    let children' := (children.set childIdx child').set (childIdx + 1) rightSib'
+                    some (parentKeys', children')
+                  | none => none
+                | _, _ => none
+              else none
+            | none => none
+          else none) = some res →
+          (res.2.map BPlusTree.count).sum = (children.map BPlusTree.count).sum := by
+        intro res hbr
+        split_ifs at hbr
+        · cases hright : children[childIdx + 1]? with
+          | none => simp [hright] at hbr
+          | some rightSib =>
+            simp only [hright] at hbr
+            by_cases hgt2 : rightSib.numKeys >
+                (if rightSib.isLeaf then minLeafKeys maxKeys else minInternalKeys maxKeys)
+            · simp only [hgt2, ↓reduceIte] at hbr
+              cases child with
+              | leaf childEntries =>
+                cases rightSib with
+                | leaf rightEntries =>
+                  cases rightEntries with
+                  | nil => simp at hbr
+                  | cons r0 rest =>
+                    cases rest with
+                    | nil => simp at hbr
+                    | cons r1 rs =>
+                      simp only [Option.some.injEq] at hbr
+                      subst hbr
+                      have hget : (children.set childIdx
+                          (BPlusTree.leaf (childEntries ++ [r0])))[childIdx + 1]? =
+                          some (BPlusTree.leaf (r0 :: r1 :: rs)) := by
+                        rw [getElem?_set_ne children _ (by omega)]
+                        exact hright
+                      have hset1 := list_map_count_set children hchild
+                        (c' := BPlusTree.leaf (childEntries ++ [r0]))
+                      have hset2 := list_map_count_set
+                        (children.set childIdx (BPlusTree.leaf (childEntries ++ [r0]))) hget
+                        (c' := BPlusTree.leaf (r1 :: rs))
+                      simp only [BPlusTree.count, List.length_append, List.length_cons,
+                        List.length_nil] at hset1 hset2 ⊢
+                      omega
+                | internal _ _ => simp at hbr
+              | internal childKeys childChildren =>
+                cases rightSib with
+                | leaf _ => simp at hbr
+                | internal rightKeys rightChildren =>
+                  cases rightKeys with
+                  | nil => simp at hbr
+                  | cons rk0 rks =>
+                    cases rightChildren with
+                    | nil => simp at hbr
+                    | cons rc0 rcs =>
+                      cases hsep : parentKeys[childIdx]? with
+                      | none => simp [hsep] at hbr
+                      | some sep =>
+                        simp only [hsep, Option.some.injEq] at hbr
+                        subst hbr
+                        have hget : (children.set childIdx
+                            (BPlusTree.internal (childKeys ++ [sep])
+                              (childChildren ++ [rc0])))[childIdx + 1]? =
+                            some (BPlusTree.internal (rk0 :: rks) (rc0 :: rcs)) := by
+                          rw [getElem?_set_ne children _ (by omega)]
+                          exact hright
+                        have hset1 := list_map_count_set children hchild
+                          (c' := BPlusTree.internal (childKeys ++ [sep]) (childChildren ++ [rc0]))
+                        have hset2 := list_map_count_set
+                          (children.set childIdx
+                            (BPlusTree.internal (childKeys ++ [sep]) (childChildren ++ [rc0])))
+                          hget (c' := BPlusTree.internal rks rcs)
+                        simp only [BPlusTree.count, List.map_append, List.sum_append,
+                          List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
+                          at hset1 hset2 ⊢
+                        omega
+            · simp [hgt2] at hbr
+      split
+      · rename_i res hbl
+        exact hborrowLeft res hbl
+      · split
+        · rename_i res hbr
+          exact hborrowRight res hbr
+        · split_ifs with hgt
+          · cases hleft : children[childIdx - 1]? with
+            | none => rfl
+            | some leftSib =>
+              cases leftSib with
+              | leaf leftEntries =>
+                cases child with
+                | leaf childEntries =>
+                  dsimp only
+                  have hget : (children.set (childIdx - 1)
+                      (BPlusTree.leaf (leftEntries ++ childEntries)))[childIdx]? =
+                      some (BPlusTree.leaf childEntries) := by
+                    rw [getElem?_set_ne children _ (by omega)]
+                    exact hchild
+                  have her := list_map_count_eraseListIdx
+                    (children.set (childIdx - 1) (BPlusTree.leaf (leftEntries ++ childEntries)))
+                    hget
+                  have hset := list_map_count_set children hleft
+                    (c' := BPlusTree.leaf (leftEntries ++ childEntries))
+                  simp only [BPlusTree.count, List.length_append] at her hset ⊢
+                  omega
+                | internal _ _ => rfl
+              | internal leftKeys leftChildren =>
+                cases child with
+                | leaf _ => rfl
+                | internal childKeys childChildren =>
+                  cases hsep : parentKeys[childIdx - 1]? with
+                  | none => rfl
+                  | some sep =>
+                    dsimp only
+                    have hget : (children.set (childIdx - 1)
+                        (BPlusTree.internal (leftKeys ++ [sep] ++ childKeys)
+                          (leftChildren ++ childChildren)))[childIdx]? =
+                        some (BPlusTree.internal childKeys childChildren) := by
+                      rw [getElem?_set_ne children _ (by omega)]
+                      exact hchild
+                    have her := list_map_count_eraseListIdx
+                      (children.set (childIdx - 1)
+                        (BPlusTree.internal (leftKeys ++ [sep] ++ childKeys)
+                          (leftChildren ++ childChildren))) hget
+                    have hset := list_map_count_set children hleft
+                      (c' := BPlusTree.internal (leftKeys ++ [sep] ++ childKeys)
+                        (leftChildren ++ childChildren))
+                    simp only [BPlusTree.count, List.map_append, List.sum_append] at her hset ⊢
+                    omega
+          · cases hright : children[childIdx + 1]? with
+            | none => rfl
+            | some rightSib =>
+              cases child with
+              | leaf childEntries =>
+                cases rightSib with
+                | leaf rightEntries =>
+                  dsimp only
+                  have hget : (children.set childIdx
+                      (BPlusTree.leaf (childEntries ++ rightEntries)))[childIdx + 1]? =
+                      some (BPlusTree.leaf rightEntries) := by
+                    rw [getElem?_set_ne children _ (by omega)]
+                    exact hright
+                  have her := list_map_count_eraseListIdx
+                    (children.set childIdx (BPlusTree.leaf (childEntries ++ rightEntries)))
+                    hget
+                  have hset := list_map_count_set children hchild
+                    (c' := BPlusTree.leaf (childEntries ++ rightEntries))
+                  simp only [BPlusTree.count, List.length_append] at her hset ⊢
+                  omega
+                | internal _ _ => rfl
+              | internal childKeys childChildren =>
+                cases rightSib with
+                | leaf _ => rfl
+                | internal rightKeys rightChildren =>
+                  cases hsep : parentKeys[childIdx]? with
+                  | none => rfl
+                  | some sep =>
+                    dsimp only
+                    have hget : (children.set childIdx
+                        (BPlusTree.internal (childKeys ++ [sep] ++ rightKeys)
+                          (childChildren ++ rightChildren)))[childIdx + 1]? =
+                        some (BPlusTree.internal rightKeys rightChildren) := by
+                      rw [getElem?_set_ne children _ (by omega)]
+                      exact hright
+                    have her := list_map_count_eraseListIdx
+                      (children.set childIdx
+                        (BPlusTree.internal (childKeys ++ [sep] ++ rightKeys)
+                          (childChildren ++ rightChildren))) hget
+                    have hset := list_map_count_set children hchild
+                      (c' := BPlusTree.internal (childKeys ++ [sep] ++ rightKeys)
+                        (childChildren ++ rightChildren))
+                    simp only [BPlusTree.count, List.map_append, List.sum_append] at her hset ⊢
+                    omega
+
+/-- Multi-level count conservation for `removeNode`: a successful deletion from any subtree
+    decreases `count` by 1. -/
+theorem removeNode_count {V : Type} (maxKeys : Nat) :
+    (t : BPlusTree Nat V) → {k : Nat} → {t' : BPlusTree Nat V} →
+    {p : Option Nat} → {b : Bool} →
+    removeNode maxKeys t k = some (t', p, b) →
+    t'.count + 1 = t.count
+  | .leaf entries, k, t', p, b, h => by
+    simp only [removeNode] at h
+    cases hrem : removeEntries entries k with
+    | none => simp [hrem] at h
+    | some res =>
+      rcases res with ⟨entries', wasFirst⟩
+      have hlen := removeEntries_length hrem
+      simp only [hrem, Option.some.injEq, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, _, _⟩
+      simp only [BPlusTree.count]
+      exact hlen
+  | .internal keys children, k, t', p, b, h => by
+    simp only [removeNode] at h
+    split at h
+    · simp at h
+    · rename_i child hc
+      have hmem : child ∈ children := List.mem_of_getElem? hc
+      split at h
+      · simp at h
+      · rename_i child' pendingMin doRebalance hrec
+        have ih := removeNode_count maxKeys child hrec
+        have hset := list_map_count_set children hc (c' := child')
+        cases doRebalance
+        · simp only [Bool.false_eq_true, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
+          rcases h with ⟨rfl, _, _⟩
+          simp only [BPlusTree.count]
+          omega
+        · simp only [↓reduceIte] at h
+          by_cases hge : child'.numKeys ≥
+              (if child'.isLeaf then minLeafKeys maxKeys else minInternalKeys maxKeys)
+          · simp only [hge, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
+            rcases h with ⟨rfl, _, _⟩
+            simp only [BPlusTree.count]
+            omega
+          · simp only [hge, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
+            rcases h with ⟨rfl, _, _⟩
+            have hreb := rebalanceChild_count maxKeys
+              (match pendingMin with
+                | none => (keys, none)
+                | some newMin =>
+                  if findChildIdx keys k > 0 then
+                    if keys[findChildIdx keys k - 1]? == some k then
+                      (keys.set (findChildIdx keys k - 1) newMin, none)
+                    else (keys, some newMin)
+                  else (keys, some newMin)).1
+              (children.set (findChildIdx keys k) child') (findChildIdx keys k)
+            simp only [BPlusTree.count]
+            omega
+  termination_by t => sizeOf t
+  decreasing_by
+    all_goals (
+      simp_wf
+      have hsz := List.sizeOf_lt_of_mem hmem
+      omega
+    )
+
+/-- Multi-level count conservation for `remove`: a successful deletion from any tree
+    decreases `count` by 1. -/
+theorem remove_count {V : Type} {maxKeys : Nat} {t t' : BPlusTree Nat V}
+    {k : Nat} (h : remove maxKeys t k = .ok t') :
+    t'.count + 1 = t.count := by
+  cases t with
+  | leaf entries =>
+    cases entries with
+    | nil => simp [remove] at h
+    | cons hd tl =>
+      simp only [remove] at h
+      cases hrem : removeNode maxKeys (.leaf (hd :: tl)) k with
+      | none => simp [hrem] at h
+      | some res =>
+        rcases res with ⟨t0, p, b⟩
+        have hcnt := removeNode_count maxKeys (.leaf (hd :: tl)) hrem
+        simp only [hrem] at h
+        cases t0 with
+        | leaf entries0 =>
+          simp only [Except.ok.injEq] at h
+          subst h
+          exact hcnt
+        | internal keys0 children0 =>
+          cases keys0 with
+          | nil =>
+            cases children0 with
+            | nil =>
+              simp only [Except.ok.injEq] at h
+              subst h
+              exact hcnt
+            | cons c cs =>
+              cases cs with
+              | nil =>
+                simp only [Except.ok.injEq] at h
+                subst h
+                simp only [BPlusTree.count, List.map_cons, List.map_nil, List.sum_cons,
+                  List.sum_nil] at hcnt ⊢
+                omega
+              | cons _ _ =>
+                simp only [Except.ok.injEq] at h
+                subst h
+                exact hcnt
+          | cons _ _ =>
+            simp only [Except.ok.injEq] at h
+            subst h
+            exact hcnt
+  | internal keys children =>
+    simp only [remove] at h
+    cases hrem : removeNode maxKeys (.internal keys children) k with
+    | none => simp [hrem] at h
+    | some res =>
+      rcases res with ⟨t0, p, b⟩
+      have hcnt := removeNode_count maxKeys (.internal keys children) hrem
+      simp only [hrem] at h
+      cases t0 with
+      | leaf entries0 =>
+        simp only [Except.ok.injEq] at h
+        subst h
+        exact hcnt
+      | internal keys0 children0 =>
+        cases keys0 with
+        | nil =>
+          cases children0 with
+          | nil =>
+            simp only [Except.ok.injEq] at h
+            subst h
+            exact hcnt
+          | cons c cs =>
+            cases cs with
+            | nil =>
+              simp only [Except.ok.injEq] at h
+              subst h
+              simp only [BPlusTree.count, List.map_cons, List.map_nil, List.sum_cons,
+                List.sum_nil] at hcnt ⊢
+              omega
+            | cons _ _ =>
+              simp only [Except.ok.injEq] at h
+              subst h
+              exact hcnt
+        | cons _ _ =>
+          simp only [Except.ok.injEq] at h
+          subst h
+          exact hcnt
 
 end Bptree
 

@@ -105,3 +105,11 @@ example : Valid 3 (empty Nat Nat) :=
 
 example : lookup (empty Nat Nat) 7 = none :=
   lookup_empty Nat 7
+
+example {t t' : BPlusTree Nat Nat} (h : insert 3 t 42 100 = .ok t') :
+    t'.count = t.count + 1 :=
+  insert_count h
+
+example {t t' : BPlusTree Nat Nat} (h : remove 3 t 42 = .ok t') :
+    t'.count + 1 = t.count :=
+  remove_count h

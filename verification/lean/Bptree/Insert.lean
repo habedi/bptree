@@ -563,6 +563,134 @@ theorem insert_split_root_count {V : Type} (t r : BPlusTree Nat V) (p : Nat) :
     (BPlusTree.internal [p] [t, r]).count = t.count + r.count := by
   simp [BPlusTree.count]
 
+private theorem list_map_count_set {K V : Type} :
+    (xs : List (BPlusTree K V)) → {pos : Nat} → {c c' : BPlusTree K V} →
+    xs[pos]? = some c →
+    ((xs.set pos c').map BPlusTree.count).sum + c.count =
+      (xs.map BPlusTree.count).sum + c'.count
+  | [], _, _, _, h => by simp at h
+  | x :: xs, 0, c, c', h => by
+    simp only [List.getElem?_cons_zero, Option.some.injEq] at h
+    subst h
+    simp only [List.set_cons_zero, List.map_cons, List.sum_cons]
+    omega
+  | x :: xs, pos + 1, c, c', h => by
+    simp only [List.getElem?_cons_succ] at h
+    have ih := list_map_count_set xs h (c' := c')
+    simp only [List.set_cons_succ, List.map_cons, List.sum_cons]
+    omega
+
+private theorem list_map_count_take_drop {K V : Type} (xs : List (BPlusTree K V)) (i : Nat) :
+    ((xs.take i).map BPlusTree.count).sum + ((xs.drop i).map BPlusTree.count).sum =
+      (xs.map BPlusTree.count).sum := by
+  have h : (xs.take i).map BPlusTree.count ++ (xs.drop i).map BPlusTree.count =
+      xs.map BPlusTree.count := by
+    rw [← List.map_append, List.take_append_drop]
+  rw [← List.sum_append, h]
+
+private theorem splitInternalNodes_count_sum {K V : Type} (keys : List K)
+    (children : List (BPlusTree K V)) (defaultK : K) :
+    let ((_, lc), _, (_, rc)) := splitInternalNodes keys children defaultK
+    (lc.map BPlusTree.count).sum + (rc.map BPlusTree.count).sum =
+      (children.map BPlusTree.count).sum := by
+  simp only [splitInternalNodes]
+  exact list_map_count_take_drop children (keys.length / 2 + 1)
+
+/-- Multi-level count conservation for `insertNode`: a successful insertion into any subtree
+    increases the total entry count by 1 (split across both halves if the subtree splits). -/
+theorem insertNode_count {V : Type} (maxKeys : Nat) :
+    (t : BPlusTree Nat V) → {k : Nat} → {v : V} →
+    {t' : BPlusTree Nat V} → {split : Option (Nat × BPlusTree Nat V)} →
+    insertNode maxKeys t k v = some (t', split) →
+    match split with
+    | none => t'.count = t.count + 1
+    | some (_, right) => t'.count + right.count = t.count + 1
+  | .leaf entries, k, v, t', split, h => by
+    simp only [insertNode] at h
+    cases hent : insertEntries entries k v with
+    | none => simp [hent] at h
+    | some entries' =>
+      have hlen := insertEntries_length hent
+      simp only [hent] at h
+      split_ifs at h
+      · simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, rfl⟩
+        have hsum := splitLeafEntries_length_sum entries'
+        simp only [BPlusTree.count]
+        omega
+      · simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, rfl⟩
+        simp only [BPlusTree.count]
+        omega
+  | .internal keys children, k, v, t', split, h => by
+    simp only [insertNode] at h
+    split at h
+    · simp at h
+    · rename_i child hc
+      have hmem : child ∈ children := List.mem_of_getElem? hc
+      split at h
+      · simp at h
+      · rename_i child' hrec
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, rfl⟩
+        have ih := insertNode_count maxKeys child hrec
+        have hset := list_map_count_set children hc (c' := child')
+        simp only [BPlusTree.count] at ih ⊢
+        omega
+      · rename_i child' promotedKey newChild hrec
+        have ih := insertNode_count maxKeys child hrec
+        have hset := list_map_count_set children hc (c' := child')
+        have htd := list_map_count_take_drop (children.set (findChildIdx keys k) child')
+          (findChildIdx keys k + 1)
+        dsimp only at ih
+        split_ifs at h
+        · simp only [Option.some.injEq, Prod.mk.injEq] at h
+          rcases h with ⟨rfl, rfl⟩
+          have hsp := splitInternalNodes_count_sum
+            (keys.take (findChildIdx keys k) ++ [promotedKey] ++ keys.drop (findChildIdx keys k))
+            ((children.set (findChildIdx keys k) child').take (findChildIdx keys k + 1) ++
+              [newChild] ++
+              (children.set (findChildIdx keys k) child').drop (findChildIdx keys k + 1)) 0
+          dsimp only at hsp
+          simp only [BPlusTree.count, List.map_append, List.sum_append, List.map_cons,
+            List.map_nil, List.sum_cons, List.sum_nil] at hsp ⊢
+          omega
+        · simp only [Option.some.injEq, Prod.mk.injEq] at h
+          rcases h with ⟨rfl, rfl⟩
+          simp only [BPlusTree.count, List.map_append, List.sum_append, List.map_cons,
+            List.map_nil, List.sum_cons, List.sum_nil]
+          omega
+  termination_by t => sizeOf t
+  decreasing_by
+    all_goals (
+      simp_wf
+      have hsz := List.sizeOf_lt_of_mem hmem
+      omega
+    )
+
+/-- Multi-level count conservation for `insert`: a successful insertion into any tree
+    increases `count` by 1. -/
+theorem insert_count {V : Type} {maxKeys : Nat} {t t' : BPlusTree Nat V}
+    {k : Nat} {v : V} (h : insert maxKeys t k v = .ok t') :
+    t'.count = t.count + 1 := by
+  simp only [insert] at h
+  cases hins : insertNode maxKeys t k v with
+  | none => simp [hins] at h
+  | some res =>
+    rcases res with ⟨t0, split⟩
+    have hcnt := insertNode_count maxKeys t hins
+    cases split with
+    | none =>
+      simp only [hins, Except.ok.injEq] at h
+      subst h
+      exact hcnt
+    | some pr =>
+      rcases pr with ⟨p, r⟩
+      simp only [hins, Except.ok.injEq] at h
+      subst h
+      simp only [BPlusTree.count, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
+      omega
+
 end Bptree
 
 end

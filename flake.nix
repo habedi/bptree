@@ -31,6 +31,7 @@
             elan
             git
             curl
+            cbmc
           ];
         };
       });

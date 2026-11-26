@@ -10,7 +10,7 @@ It is not a direct C-to-Lean proof of C code.
 
 The current formalization covers node-level invariants, search semantics, leaf insertion, node splitting bounds, and preallocation split counting.
 
-1. **Machine-Checked in Lean 4 (34 Theorems, Zero `sorry`)**:
+1. **Machine-Checked in Lean 4 (122 Theorems, Zero `sorry`)**:
    - Capacity and occupancy bounds for `minLeafKeys` and `minInternalKeys`
    - Structural validity (`Valid`) of the empty tree
    - Tree count consistency (`count_eq_toList_length`)
@@ -22,8 +22,8 @@ The current formalization covers node-level invariants, search semantics, leaf i
    - Upper bounds on the pre-pass cascading split counter (`countContiguousSplits_le_height`, `reservedNodesNeeded_le_height_succ`)
 
 2. **Differential-Tested Between C and Lean 4 (`make lean-diff`)**:
-   - Multi-level `lookup`, `insert`, `remove` (including `rebalance_up`, borrowing, merging, ancestor separator updates, and root height shrinking), and `rangeQuery`
-   - Canonical S-expression serialization (`BPlusTree.serialize` vs. `test/extras/test_differential.c`) verified byte-for-byte across `max_keys ∈ {3, 4, 7, 12}` and sequential, duplicate, reverse, and pseudo-random mixed workloads
+   - Multi-level `lookup`, `insert`, `remove` (including `rebalance_up`, borrowing, merging, ancestor separator updates, and root height shrinking), `clear`, `iterFind`, `lowerBound`, `upperBound`, and `rangeQuery`
+   - Canonical S-expression serialization (`BPlusTree.serialize` vs. `test/extras/test_differential.c`) verified byte-for-byte across `max_keys ∈ {3, 4, 5, 6, 7, 8, 12}` and sequential, duplicate, reverse, pseudo-random, and interleaved-clear workloads
 
 3. **Runtime-Checked in C Only (Not Yet Formalized in Lean 4)**:
    - Iterator state machine (`bptree_iter_begin`, `bptree_iter_next`, `bptree_iter_find`, `bptree_iter_lower_bound`, `bptree_iter_upper_bound`)
@@ -35,26 +35,30 @@ The current formalization covers node-level invariants, search semantics, leaf i
 | # | Property | Status | Lean Module | Lean Theorem or Definition | C Counterpart in `bptree.h` |
 |---|---|---|---|---|---|
 | 1 | Capacity lower and upper bounds | Verified in Lean 4 | `Bptree.Basic` | `minLeafKeys_pos`, `minInternalKeys_pos`, `minLeafKeys_le_maxKeys`, `minInternalKeys_le_maxKeys` | `bptree_create` |
-| 2 | Empty tree count and height | Verified in Lean 4 | `Bptree.Basic` | `count_empty`, `height_empty` | `bptree_create`, `bptree_count`, `bptree_height` |
+| 2 | Empty and cleared tree count and height | Verified in Lean 4 | `Bptree.Basic` | `count_empty`, `height_empty`, `clear_eq_empty`, `clear_count`, `clear_height` | `bptree_create`, `bptree_clear`, `bptree_count`, `bptree_height` |
 | 3 | Tree count equals leaf entry count | Verified in Lean 4 | `Bptree.Basic` | `count_eq_toList_length` | `bptree_check_invariants` |
 | 4 | Empty tree structural validity | Verified in Lean 4 | `Bptree.Invariants` | `uniformDepth_empty`, `valid_empty` | `bptree_create`, `bptree_check_invariants` |
-| 5 | Empty tree lookup and containment | Verified in Lean 4 | `Bptree.Search` | `lookup_empty`, `contains_empty`, `contains_eq_isSome_lookup` | `bptree_get`, `bptree_contains` |
-| 6 | Internal child index within bounds | Verified in Lean 4 | `Bptree.Search` | `findChildIdx_le_length` | `bptree_node_search` |
-| 7 | Leaf lookup soundness and completeness | Verified in Lean 4 | `Bptree.Search` | `leafLookup_mem`, `leafLookup_of_mem_sorted` | `bptree_get`, `bptree_node_search` |
-| 8 | Leaf duplicate-key rejection | Verified in Lean 4 | `Bptree.Insert` | `insertEntries_duplicate` | `bptree_insert_internal`, `bptree_put` |
-| 9 | Leaf insertion length and lookup | Verified in Lean 4 | `Bptree.Insert` | `insertEntries_length`, `leafLookup_insertEntries_self`, `leafLookup_insertEntries_ne` | `bptree_insert_internal` |
-| 10 | Leaf insertion sortedness preservation | Verified in Lean 4 | `Bptree.Insert` | `insertEntries_preserves_sorted` | `bptree_insert_internal`, `bptree_check_invariants_node` |
-| 11 | Leaf split entry preservation | Verified in Lean 4 | `Bptree.Insert` | `splitLeafEntries_append` | `bptree_insert_internal` |
-| 12 | Leaf split occupancy bounds | Verified in Lean 4 | `Bptree.Insert` | `splitLeaf_left_bounds`, `splitLeaf_right_bounds` | `bptree_insert_internal` |
-| 13 | Internal split occupancy bounds | Verified in Lean 4 | `Bptree.Insert` | `splitInternal_left_bounds`, `splitInternal_right_bounds` | `bptree_insert_internal` |
-| 14 | Preallocation split counter upper bounds | Verified in Lean 4 | `Bptree.Insert` | `countContiguousSplits_le_height`, `reservedNodesNeeded_le_height_succ` | `bptree_put` |
-| 15 | Empty tree and missing key removal | Verified in Lean 4 | `Bptree.Remove` | `remove_empty`, `removeEntries_not_found` | `bptree_remove` |
-| 16 | Leaf removal length, sortedness, and lookup | Verified in Lean 4 | `Bptree.Remove` | `removeEntries_length`, `removeEntries_preserves_sorted`, `leafLookup_removeEntries_self` | `bptree_remove` |
-| 17 | Leaf and internal merge overflow freedom | Verified in Lean 4 | `Bptree.Remove` | `mergeLeaf_bounds`, `mergeInternal_bounds` | `bptree_rebalance_up` |
-| 18 | Multi-level search, insert, remove, and range | Modelled and differential-tested | `Bptree.Search`, `Bptree.Insert`, `Bptree.Remove` | `lookup`, `insert`, `remove`, `rangeQuery`, `BPlusTree.serialize` | `bptree_get`, `bptree_put`, `bptree_remove`, `bptree_get_range` |
-| 19 | Full-tree insert and remove invariant proofs | Planned | `Bptree.Insert`, `Bptree.Remove` | `Valid` | `bptree_put`, `bptree_remove`, `bptree_check_invariants` |
-| 20 | Leaf `next`-pointer chain continuity | Runtime-checked in C | `Bptree.Basic` | `leaves` (abstract leaf order) | `bptree_check_invariants` |
-| 21 | Allocation failure atomicity and memory safety | Tested in C (ASan, UBSan) | `Bptree.Insert` | `reservedNodesNeeded` | `bptree_put`, `test/extras/test_safety.c` |
+| 5 | Master executable invariant checker soundness | Verified in Lean 4 | `Bptree.Invariants` | `checkInvariants_sound`, `checkCapacity_iff`, `checkKeysSorted_sound`, `checkNodeSorted_sound`, `checkChildCount_sound`, `checkNonRootOccupancy_sound`, `checkRootOccupancy_sound`, `checkUniformDepth_sound`, `checkAdjacentSeps_sound`, `checkSeparators_sound`, `checkInvariants_empty` | `bptree_check_invariants` |
+| 6 | Empty tree lookup and containment | Verified in Lean 4 | `Bptree.Search` | `lookup_empty`, `contains_empty`, `contains_eq_isSome_lookup` | `bptree_get`, `bptree_contains` |
+| 7 | Internal child index within bounds | Verified in Lean 4 | `Bptree.Search` | `findChildIdx_le_length` | `bptree_node_search` |
+| 8 | Leaf and multi-level lookup soundness and completeness | Verified in Lean 4 | `Bptree.Search`, `Bptree.Invariants` | `leafLookup_mem`, `leafLookup_of_mem_sorted`, `lookup_mem_toList`, `contains_true_exists_mem_toList`, `findChildIdx_gt_of_le`, `findChildIdx_le_of_lt`, `findChildIdx_eq_of_bounds`, `lookup_of_mem_toList`, `lookup_eq_some_iff_mem_toList`, `contains_eq_true_iff_exists_mem_toList`, `SubtreesOrdered`, `subtreesOrdered_empty` | `bptree_get`, `bptree_contains`, `bptree_node_search` |
+| 9 | Range query and iterator bounds and find | Verified in Lean 4 | `Bptree.Search` | `rangeQuery_empty`, `mem_rangeQuery_iff`, `rangeQuery_gt`, `lowerBound_empty`, `upperBound_empty`, `lowerBound_mem`, `upperBound_mem`, `upperBound_eq_lowerBound_succ`, `iterFind_empty`, `iterFind_eq_some_iff` | `bptree_get_range`, `bptree_iter_lower_bound`, `bptree_iter_upper_bound`, `bptree_iter_find` |
+| 10 | Multi-level duplicate-key rejection | Verified in Lean 4 | `Bptree.Insert` | `insertEntries_duplicate`, `insertNode_duplicate_of_lookup`, `insert_duplicate_of_lookup` | `bptree_insert_internal`, `bptree_put` |
+| 11 | Multi-level, leaf, and root-split insertion count, height, `toList`, and lookup | Verified in Lean 4 | `Bptree.Insert` | `insertEntries_length`, `leafLookup_insertEntries_self`, `leafLookup_insertEntries_ne`, `insert_leaf_count`, `insert_leaf_toList`, `insertNode_leaf_non_split_height`, `insert_split_root_height`, `insert_split_root_count`, `insertNode_count`, `insert_count`, `toList_internal_eq_flatMap`, `splitInternalNodes_toList_append`, `insertNode_mem_toList_iff`, `insert_mem_toList_iff` | `bptree_insert_internal`, `bptree_put` |
+| 12 | Leaf insertion sortedness preservation | Verified in Lean 4 | `Bptree.Insert` | `insertEntries_preserves_sorted` | `bptree_insert_internal`, `bptree_check_invariants_node` |
+| 13 | Leaf split entry, sortedness, count, and separator preservation | Verified in Lean 4 | `Bptree.Insert` | `splitLeafEntries_append`, `splitLeafEntries_length_sum`, `splitLeafEntries_left_sorted`, `splitLeafEntries_right_sorted`, `splitLeafEntries_promoted_eq_min`, `splitLeafEntries_left_lt_promoted` | `bptree_insert_internal` |
+| 14 | Leaf split occupancy bounds | Verified in Lean 4 | `Bptree.Insert` | `splitLeaf_left_bounds`, `splitLeaf_right_bounds` | `bptree_insert_internal` |
+| 15 | Internal split occupancy, sortedness, and child-count bounds | Verified in Lean 4 | `Bptree.Insert` | `splitInternal_left_bounds`, `splitInternal_right_bounds`, `splitInternal_children_lengths`, `splitInternal_keys_length_sum`, `splitInternal_children_append`, `splitInternal_left_sorted`, `splitInternal_right_sorted` | `bptree_insert_internal` |
+| 16 | Preallocation split counter upper bounds | Verified in Lean 4 | `Bptree.Insert` | `countContiguousSplits_le_height`, `reservedNodesNeeded_le_height_succ` | `bptree_put` |
+| 17 | Multi-level missing-key removal rejection | Verified in Lean 4 | `Bptree.Remove` | `remove_empty`, `removeEntries_not_found`, `removeNode_not_found_of_lookup`, `remove_not_found_of_lookup` | `bptree_remove` |
+| 18 | Multi-level and leaf removal length, count, `toList`, sortedness, and lookup | Verified in Lean 4 | `Bptree.Remove` | `removeEntries_length`, `removeEntries_preserves_sorted`, `leafLookup_removeEntries_self`, `leafLookup_removeEntries_ne`, `remove_leaf_count`, `remove_leaf_toList`, `rebalanceChild_count`, `removeNode_count`, `remove_count`, `mem_removeEntries_iff`, `rebalanceChild_toList`, `removeNode_mem_toList_iff`, `remove_mem_toList_iff` | `bptree_remove`, `bptree_rebalance_up` |
+| 19 | Leaf and internal sibling borrowing bounds and preservation | Verified in Lean 4 | `Bptree.Remove` | `splitLast?_append_eq`, `splitLast?_length`, `borrowLeft_leaf_append`, `borrowRight_leaf_append`, `borrowLeft_leaf_count_sum`, `borrowRight_leaf_count_sum`, `borrowLeft_leaf_bounds`, `borrowRight_leaf_bounds`, `borrowLeft_internal_bounds`, `borrowRight_internal_bounds` | `bptree_rebalance_up` |
+| 20 | Leaf and internal merge overflow freedom, sortedness, and child count | Verified in Lean 4 | `Bptree.Remove` | `mergeLeaf_bounds`, `mergeInternal_bounds`, `mergeInternal_children_length`, `mergeLeaf_preserves_sorted`, `mergeInternal_preserves_sorted` | `bptree_rebalance_up` |
+| 21 | Multi-level search, insert, remove, and range | Modelled and differential-tested | `Bptree.Search`, `Bptree.Insert`, `Bptree.Remove` | `lookup`, `insert`, `remove`, `rangeQuery`, `BPlusTree.serialize`, `checkInvariants` | `bptree_get`, `bptree_put`, `bptree_remove`, `bptree_get_range` |
+| 22 | Multi-level `insert` structural invariant preservation (`ChildCountValid`, `UniformDepth`, `NonRootOccupancy`, and `RootOccupancy`) | Verified in Lean 4 | `Bptree.Insert` | `insertNode_preserves_ChildCountValid`, `insert_preserves_ChildCountValid`, `insertNode_preserves_UniformDepth`, `insert_preserves_UniformDepth`, `insertNode_preserves_NonRootOccupancy`, `insert_preserves_RootOccupancy` | `bptree_put`, `bptree_check_invariants` |
+| 23 | Full-tree `insert` sortedness and separator preservation, and full-tree `remove` invariant preservation | Planned | `Bptree.Insert`, `Bptree.Remove` | `NodeSorted`, `SeparatorsValid`, `Valid` | `bptree_put`, `bptree_remove`, `bptree_check_invariants` |
+| 24 | Leaf `next`-pointer chain continuity | Runtime-checked in C | `Bptree.Basic` | `leaves` (abstract leaf order) | `bptree_check_invariants` |
+| 25 | Allocation failure atomicity and memory safety | Tested in C (ASan, UBSan) and CBMC (`verification/cbmc/`) | `Bptree.Insert` | `reservedNodesNeeded` | `bptree_put`, `test/extras/test_safety.c` |
 
 ## Project Structure
 

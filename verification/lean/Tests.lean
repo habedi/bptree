@@ -70,13 +70,81 @@ private meta def sampleAfterRemoves : Except Status (BPlusTree Nat Nat) := do
   let t4 ← remove 3 t3 40
   remove 3 t4 50
 
+-- Executable invariant checks
+#guard checkInvariants 3 (empty Nat Nat) == true
+#guard match sampleTree with
+  | .ok t => checkInvariants 3 t == true
+  | .error _ => false
+
+-- Iterator lowerBound and upperBound checks
+#guard lowerBound (empty Nat Nat) 10 == none
+#guard upperBound (empty Nat Nat) 10 == none
+#guard match sampleTree with
+  | .ok t =>
+    lowerBound t 5 == some (10, 100) &&
+    lowerBound t 25 == some (30, 300) &&
+    lowerBound t 30 == some (30, 300) &&
+    lowerBound t 51 == none &&
+    upperBound t 30 == some (40, 400) &&
+    upperBound t 50 == none &&
+    iterFind t 30 == some (30, 300) &&
+    iterFind t 25 == none &&
+    (clear Nat Nat t).serialize == "(leaf [])"
+  | .error _ => false
+
 #guard match sampleAfterRemoves with
-  | .ok t => t.count == 0 && t.height == 1 && t.serialize == "(leaf [])"
+  | .ok t => t.count == 0 && t.height == 1 && t.serialize == "(leaf [])" && checkInvariants 3 t == true
   | .error _ => false
 
 -- Verified theorem instantiations
 example : Valid 3 (empty Nat Nat) :=
   valid_empty Nat ⟨by decide, by decide⟩
 
+example : Valid 3 (empty Nat Nat) :=
+  checkInvariants_sound (by decide)
+
 example : lookup (empty Nat Nat) 7 = none :=
   lookup_empty Nat 7
+
+example {t t' : BPlusTree Nat Nat} (h : insert 3 t 42 100 = .ok t') :
+    t'.count = t.count + 1 :=
+  insert_count h
+
+example {t t' : BPlusTree Nat Nat} (h : remove 3 t 42 = .ok t') :
+    t'.count + 1 = t.count :=
+  remove_count h
+
+example {t t' : BPlusTree Nat Nat} (hcc : ChildCountValid t)
+    (h : insert 3 t 42 100 = .ok t') :
+    ChildCountValid t' :=
+  insert_preserves_ChildCountValid hcc h
+
+example {t t' : BPlusTree Nat Nat} (hcc : ChildCountValid t)
+    (hud : UniformDepth t t.height) (h : insert 3 t 42 100 = .ok t') :
+    UniformDepth t' t'.height :=
+  insert_preserves_UniformDepth hcc hud h
+
+example {t t' : BPlusTree Nat Nat} (hro : RootOccupancy 3 t)
+    (h : insert 3 t 42 100 = .ok t') :
+    RootOccupancy 3 t' :=
+  insert_preserves_RootOccupancy (by decide) hro h
+
+example {t : BPlusTree Nat Nat} (hsort : NodeSorted t) (hcc : ChildCountValid t)
+    (hord : SubtreesOrdered t) (k v : Nat) :
+    lookup t k = some v ↔ (k, v) ∈ t.toList :=
+  lookup_eq_some_iff_mem_toList hsort hcc hord
+
+example {t : BPlusTree Nat Nat} (hsort : NodeSorted t) (hcc : ChildCountValid t)
+    (hord : SubtreesOrdered t) (k : Nat) :
+    contains t k = true ↔ ∃ v, (k, v) ∈ t.toList :=
+  contains_eq_true_iff_exists_mem_toList hsort hcc hord
+
+example {t t' : BPlusTree Nat Nat} (k v : Nat) (h : insert 3 t k v = .ok t')
+    (p : Nat × Nat) :
+    p ∈ t'.toList ↔ p = (k, v) ∨ p ∈ t.toList :=
+  insert_mem_toList_iff h p
+
+example {t t' : BPlusTree Nat Nat} (hsort : NodeSorted t) (hcc : ChildCountValid t)
+    (hord : SubtreesOrdered t) (k : Nat) (h : remove 3 t k = .ok t') (x : Nat × Nat) :
+    x ∈ t'.toList ↔ x ∈ t.toList ∧ x.1 ≠ k :=
+  remove_mem_toList_iff hsort hcc hord h x

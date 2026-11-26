@@ -76,9 +76,52 @@ static void run_remove_step(bptree* tree, int step_idx, int64_t k) {
     putchar('\n');
 }
 
+static void run_clear_step(bptree* tree, int step_idx) {
+    bptree_clear(tree);
+    assert(bptree_check_invariants(tree));
+    bptree_stats stats = bptree_get_stats(tree);
+    printf("STEP %d CLEAR -> OK count=%d height=%d nodes=%d tree=",
+           step_idx, stats.count, stats.height, stats.node_count);
+    serialize_node(tree, tree->root, stdout);
+    putchar('\n');
+}
+
 static void run_queries(const bptree* tree) {
+    printf("QUERY ITER -> [");
+    bool first = true;
+    for (bptree_iter it = bptree_iter_begin(tree); bptree_iter_valid(&it); bptree_iter_next(&it)) {
+        if (!first) putchar(',');
+        first = false;
+        printf("%" PRId64 ":%" PRId64, (int64_t)bptree_iter_key(&it),
+               (int64_t)bptree_iter_value(&it));
+    }
+    puts("]");
+    for (int i = 0; i < 10; i++) {
+        int64_t k = (int64_t)(i * 6);
+        bptree_iter lb = bptree_iter_lower_bound(tree, &k);
+        if (bptree_iter_valid(&lb)) {
+            printf("QUERY LB %" PRId64 " -> %" PRId64 ":%" PRId64 "\n", k,
+                   (int64_t)bptree_iter_key(&lb), (int64_t)bptree_iter_value(&lb));
+        } else {
+            printf("QUERY LB %" PRId64 " -> END\n", k);
+        }
+        bptree_iter ub = bptree_iter_upper_bound(tree, &k);
+        if (bptree_iter_valid(&ub)) {
+            printf("QUERY UB %" PRId64 " -> %" PRId64 ":%" PRId64 "\n", k,
+                   (int64_t)bptree_iter_key(&ub), (int64_t)bptree_iter_value(&ub));
+        } else {
+            printf("QUERY UB %" PRId64 " -> END\n", k);
+        }
+    }
     for (int i = 0; i < 20; i++) {
         int64_t k = (int64_t)(i * 3 + 1);
+        bptree_iter fit = bptree_iter_find(tree, &k);
+        if (bptree_iter_valid(&fit)) {
+            printf("QUERY FIND %" PRId64 " -> %" PRId64 ":%" PRId64 "\n", k,
+                   (int64_t)bptree_iter_key(&fit), (int64_t)bptree_iter_value(&fit));
+        } else {
+            printf("QUERY FIND %" PRId64 " -> END\n", k);
+        }
         int64_t v = 0;
         bptree_status st = bptree_get(tree, &k, &v);
         if (st == BPTREE_OK) {
@@ -105,7 +148,7 @@ static void run_queries(const bptree* tree) {
 }
 
 int main(void) {
-    const int orders[] = {3, 4, 7, 12};
+    const int orders[] = {3, 4, 5, 6, 7, 8, 12};
     const int num_orders = (int)(sizeof(orders) / sizeof(orders[0]));
 
     for (int o = 0; o < num_orders; o++) {
@@ -176,6 +219,39 @@ int main(void) {
         }
         run_queries(t3);
         bptree_free(t3);
+
+        // Workload 4: Interleaved PUT/DEL + CLEAR + post-CLEAR wave
+        printf("WORKLOAD interleaved_clear max_keys=%d\n", max_keys);
+        bptree* t4 = bptree_create(max_keys, NULL, false);
+        assert(t4 != NULL);
+        uint64_t rng4 = 1337;
+        for (int s = 0; s < 200; s++) {
+            rng4 = next_rand(rng4);
+            uint64_t op = (rng4 >> 8) % 5;
+            rng4 = next_rand(rng4);
+            int64_t k = (int64_t)((rng4 >> 16) % 50) + 1;
+            if (op < 3) {
+                run_step(t4, s, k, k * 100 + s);
+            } else {
+                run_remove_step(t4, s, k);
+            }
+        }
+        run_queries(t4);
+        run_clear_step(t4, 200);
+        run_queries(t4);
+        for (int s = 0; s < 40; s++) {
+            rng4 = next_rand(rng4);
+            uint64_t op = (rng4 >> 8) % 5;
+            rng4 = next_rand(rng4);
+            int64_t k = (int64_t)((rng4 >> 16) % 50) + 1;
+            if (op < 3) {
+                run_step(t4, 201 + s, k, k * 100 + s);
+            } else {
+                run_remove_step(t4, 201 + s, k);
+            }
+        }
+        run_queries(t4);
+        bptree_free(t4);
     }
 
     return 0;

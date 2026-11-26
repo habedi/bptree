@@ -57,6 +57,10 @@ instance {K V : Type} [BEq K] [BEq V] : BEq (BPlusTree K V) where
 def empty (K V : Type) : BPlusTree K V :=
   .leaf []
 
+/-- Clear all entries from a B+ tree, matching `bptree_clear`. -/
+def clear (K V : Type) (_ : BPlusTree K V) : BPlusTree K V :=
+  empty K V
+
 /-- Return `true` if the root node is a leaf. -/
 def BPlusTree.isLeaf {K V : Type} : BPlusTree K V → Bool
   | .leaf _ => true
@@ -146,6 +150,18 @@ theorem count_empty (K V : Type) : (empty K V).count = 0 := by
 theorem height_empty (K V : Type) : (empty K V).height = 1 := by
   simp [empty, BPlusTree.height]
 
+/-- Clearing any tree yields the empty tree. -/
+theorem clear_eq_empty {K V : Type} (t : BPlusTree K V) : clear K V t = empty K V := by
+  rfl
+
+/-- A cleared tree has count 0. -/
+theorem clear_count {K V : Type} (t : BPlusTree K V) : (clear K V t).count = 0 := by
+  simp [clear, count_empty]
+
+/-- A cleared tree has height 1. -/
+theorem clear_height {K V : Type} (t : BPlusTree K V) : (clear K V t).height = 1 := by
+  simp [clear, height_empty]
+
 /-- `t.count` equals the length of `t.toList`. -/
 theorem count_eq_toList_length {K V : Type} : (t : BPlusTree K V) →
     t.count = t.toList.length
@@ -165,6 +181,17 @@ theorem count_eq_toList_length {K V : Type} : (t : BPlusTree K V) →
       have hcs := ih (fun x hx => hchildren x (by simp [hx]))
       simp only [List.length_flatten] at hc hcs
       omega
+
+/-- The `toList` of an internal node is the concatenation of its children's `toList`s. -/
+theorem toList_internal_eq_flatMap {K V : Type} (keys : List K)
+    (children : List (BPlusTree K V)) :
+    (BPlusTree.internal keys children).toList = children.flatMap BPlusTree.toList := by
+  simp only [BPlusTree.toList, BPlusTree.leaves]
+  induction children with
+  | nil => simp
+  | cons c cs ih =>
+    simp only [List.flatMap_cons, List.flatten_append, ih]
+    rfl
 
 end Bptree
 

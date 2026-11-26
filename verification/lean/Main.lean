@@ -17,9 +17,13 @@ private def runStep (maxKeys : Nat) (tree : BPlusTree Nat Nat) (stepIdx k v : Na
     IO (BPlusTree Nat Nat) := do
   match insert maxKeys tree k v with
   | .ok t' =>
+    if !checkInvariants maxKeys t' then
+      throw (IO.userError s!"Lean invariant check failed after PUT {k}")
     IO.println s!"STEP {stepIdx} PUT {k} {v} -> OK count={t'.count} height={t'.height} nodes={t'.nodeCount} tree={t'.serialize}"
     return t'
   | .error st =>
+    if !checkInvariants maxKeys tree then
+      throw (IO.userError s!"Lean invariant check failed after failed PUT {k}")
     IO.println s!"STEP {stepIdx} PUT {k} {v} -> {formatStatus st} count={tree.count} height={tree.height} nodes={tree.nodeCount} tree={tree.serialize}"
     return tree
 
@@ -27,9 +31,13 @@ private def runRemoveStep (maxKeys : Nat) (tree : BPlusTree Nat Nat) (stepIdx k 
     IO (BPlusTree Nat Nat) := do
   match remove maxKeys tree k with
   | .ok t' =>
+    if !checkInvariants maxKeys t' then
+      throw (IO.userError s!"Lean invariant check failed after DEL {k}")
     IO.println s!"STEP {stepIdx} DEL {k} -> OK count={t'.count} height={t'.height} nodes={t'.nodeCount} tree={t'.serialize}"
     return t'
   | .error st =>
+    if !checkInvariants maxKeys tree then
+      throw (IO.userError s!"Lean invariant check failed after failed DEL {k}")
     IO.println s!"STEP {stepIdx} DEL {k} -> {formatStatus st} count={tree.count} height={tree.height} nodes={tree.nodeCount} tree={tree.serialize}"
     return tree
 

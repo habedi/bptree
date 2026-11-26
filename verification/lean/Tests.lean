@@ -70,8 +70,14 @@ private meta def sampleAfterRemoves : Except Status (BPlusTree Nat Nat) := do
   let t4 ← remove 3 t3 40
   remove 3 t4 50
 
+-- Executable invariant checks
+#guard checkInvariants 3 (empty Nat Nat) == true
+#guard match sampleTree with
+  | .ok t => checkInvariants 3 t == true
+  | .error _ => false
+
 #guard match sampleAfterRemoves with
-  | .ok t => t.count == 0 && t.height == 1 && t.serialize == "(leaf [])"
+  | .ok t => t.count == 0 && t.height == 1 && t.serialize == "(leaf [])" && checkInvariants 3 t == true
   | .error _ => false
 
 -- Verified theorem instantiations

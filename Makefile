@@ -323,3 +323,12 @@ lean-diff: $(BIN_DIR)/test_differential ## Run differential tests comparing C an
 	$(MAKE) -s -C verification/lean run > $(BIN_DIR)/diff_lean.txt
 	diff -u $(BIN_DIR)/diff_c.txt $(BIN_DIR)/diff_lean.txt
 	@echo "Differential test passed: C and Lean 4 produced identical trees across all workloads."
+
+.PHONY: cbmc
+cbmc: ## Run CBMC bounded model checking harnesses
+	@echo "Running CBMC bounded model checking harnesses..."
+	NIX_HARDENING_ENABLE='' cbmc -I$(INC_DIR) verification/cbmc/layout_harness.c
+	NIX_HARDENING_ENABLE='' cbmc -I$(INC_DIR) verification/cbmc/compare_harness.c
+	NIX_HARDENING_ENABLE='' cbmc -I$(INC_DIR) --unwind 2 --object-bits 10 verification/cbmc/api_harness.c
+	NIX_HARDENING_ENABLE='' cbmc -I$(INC_DIR) --unwind 11 --object-bits 10 verification/cbmc/reservation_harness.c
+	@echo "All CBMC verification checks passed."

@@ -57,7 +57,7 @@ The current formalization covers node-level invariants, search semantics, leaf i
 | 20 | Multi-level search, insert, remove, and range | Modelled and differential-tested | `Bptree.Search`, `Bptree.Insert`, `Bptree.Remove` | `lookup`, `insert`, `remove`, `rangeQuery`, `BPlusTree.serialize`, `checkInvariants` | `bptree_get`, `bptree_put`, `bptree_remove`, `bptree_get_range` |
 | 21 | Full-tree insert and remove invariant proofs | Planned | `Bptree.Insert`, `Bptree.Remove` | `Valid` | `bptree_put`, `bptree_remove`, `bptree_check_invariants` |
 | 22 | Leaf `next`-pointer chain continuity | Runtime-checked in C | `Bptree.Basic` | `leaves` (abstract leaf order) | `bptree_check_invariants` |
-| 23 | Allocation failure atomicity and memory safety | Tested in C (ASan, UBSan) | `Bptree.Insert` | `reservedNodesNeeded` | `bptree_put`, `test/extras/test_safety.c` |
+| 23 | Allocation failure atomicity and memory safety | Tested in C (ASan, UBSan) and CBMC (`verification/cbmc/`) | `Bptree.Insert` | `reservedNodesNeeded` | `bptree_put`, `test/extras/test_safety.c` |
 
 ## Project Structure
 

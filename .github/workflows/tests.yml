@@ -44,6 +44,9 @@ jobs:
         run: |
           nix develop --command bash -c "make lean-cache && make lean-test && make lean-diff"
 
+      - name: Run CBMC bounded model checking
+        run: nix develop --command make cbmc
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
